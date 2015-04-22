@@ -8,7 +8,7 @@
 "use strict";
 function getName() { return 'Simon'; }
 getName.deferred=true;
-Object = JOQULAR.enhance(Object,{enhancePrimitives:true,enhanceArray:true,enhanceSet:true,enhanceDate:true,index:true});
+Object = JOQULAR.enhance(Object,{enhancePrimitives:true,enhanceArray:true,enhanceSet:true,enhanceDate:true,index:true,datastore:{name:"JOQULARTest",type:"IndexedDB",format:"pseudo-blob"}});
 var TimeSpan = JOQULAR.TimeSpan;
 var d1 = new Date();
 var d2 = new Date();
@@ -104,134 +104,7 @@ var r1 = AsyncObject.joqularFind({id: 10},function(results) { console.log(result
 var r2 = PromiseObject.joqularFind({id: 10},true);
 r2.then(function(results) { console.log(results); });
 
-console.time("generate");
-var objects = [];
-var numobj = 50000;
-console.time("index");
-for(let i=0;i<numobj;i++) {
-	let p = new Person(i);
-	objects.push(p);
-	objects.push(new TestObject(i));
-}
-console.timeEnd("generate");
-console.time("linearFind middle");
-for(let i=0;i<objects.length;i++) {
-	if(objects[i].name===numobj/2) {
-		console.log(objects[i]);
-		break;
-	}
-}
-console.timeEnd("linearFind middle");
 
-console.time("linearFind end");
-for(let i=0;i<objects.length;i++) {
-	if(objects[i].name===numobj-1) {
-		console.log(objects[i]);
-		break;
-	}
-}
-console.timeEnd("linearFind end");
-
-Person.joqularFind(null,true).then(function(results) { 
-	console.timeEnd("index");
-	console.time("joqularFind middle");
-	console.log(Person.joqularFind({name: numobj/2}));
-	console.timeEnd("joqularFind middle");
-	console.time("joqularFind middle after first cache");
-	console.log(Person.joqularFind({name: numobj/2}));
-	console.timeEnd("joqularFind middle after first cache");
-	console.time("joqularFind end");
-	console.log(Person.joqularFind({name: numobj-1}));
-	console.timeEnd("joqularFind end");	
-});
-
-
-
-/*
-console.time("joqularFind test");
-console.log(Person.joqularFind({name: {lt: 5}}));
-console.timeEnd("joqularFind test");
-console.time("linearFind test");
-var found = [];
-for(var i=0;i<objects.length;i++) {
-	if(objects[i].name<5) {
-		found.push(objects[1]);
-	}
-}
-console.log(found);
-console.timeEnd("linearFind test");
-*/
-// {name: {'@': [new Date(),'Simon',new Duration().atLeast(),'Joe']}}
-
-function Relation(specification) {
-	var f = function(config) {
-		var me = this;
-		for(var key in config) {
-		    if(typeof(config[key])!=="function") {
-				if(cons.specification.objects[key]) {
-					if(cons.specification.objects[key].kind) {
-						if(config[key] instanceof cons.specification.objects[key].kind) {
-							me[key] = config[key];
-						} else {
-							throw new Error(cons.specification.name + "." + key + " must be an instance of " + cons.specification.objects[key].kind);
-						}
-					}
-				} else {
-					me[key] = config[key];
-				}
-			}
-		}
-		me.implications = [];
-		cons.implications.forEach(function(implication) {
-			var implications = implication.mapping["function"](me);
-			implications.forEach(function(implied) {
-				var relation = new implication.relation(implied);
-				if(implication.mapping.cascade.updates) {
-					Object.observe(me,function(changes) {
-						changes.forEach(function(change) {
-							if(typeof(implication.mapping.cascade.updates)==="function") {
-								implication.mapping.cascade.updates.call(relation,change);
-							} else {
-								implication.mapping["function"](me);
-							}
-						});
-					},["update"]);
-				}
-				me.implications.push(relation);
-			});
-		});
-		return me;
-	}
-	var cons = new Function("f","return function " + specification.name + "() { return f.call(this,arguments[0]); }")(f);
-	cons.specification = specification;
-	cons.implications = [];
-	cons.implies = function(relation,mapping) {
-		cons.implications.push({relation:relation,mapping:mapping});
-		return cons;
-	}
-	cons.prototype = new Object();
-	return cons;
-}
-var Marriage = Relation({name: "Marriage", objects: {husband:{cardinality: 1, kind: Person}, wife:{cardinality: 1, kind: Person}}});
-var Spouse = Relation({name: "Spouse", objects: {partner1:{cardinality: 1, kind: Person}, partner2:{cardinality: 1, kind: Person}}});
-var Children = Relation({name: "parent", objects: {parent: {cardinality: 2, kind: Person}, children: {cardinality: Infinity, kind: Person}}});
-Marriage = JOQULAR.createIndex(Marriage);
-Spouse = JOQULAR.createIndex(Spouse);
-Marriage.implies(Spouse,{cascade: {
-	deletes:true,
-	updates: function(change) {
-			if(this.partner1 === change.oldValue) {
-				this.partner1 = change.object[change.name];
-			} else if(this.partner2 === change.oldValue) {
-				this.partner2 = change.object[change.name];
-			}
-		}
-	}, "function": function(marriage) { return [{partner1: marriage.husband, partner2: marriage.wife},{partner1: marriage.wife, partner2: marriage.husband}] }});
-
-var Simon = new Person('Simon');
-var Juliana = new Person('Juliana');
-var m1 = new Marriage({husband: Simon, wife: Juliana});
-var m2 = new Marriage({husband: {}, wife: Juliana});
 </script>
 
 </body>

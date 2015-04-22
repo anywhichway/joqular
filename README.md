@@ -1,2 +1,8 @@
 # joqular
-JavaScript Object Query Lanuguage Representation - Funny, it's just JSON.
+JavaScript Object Query Language Representation - Funny, it's just JSON.
+
+See the Wiki for detailed documentation: https://github.com/anywhichway/joqular/wiki
+
+# updates
+
+2015-04-24 Initial public release v0.0.91

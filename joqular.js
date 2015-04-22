@@ -22,7 +22,8 @@
 	    var lo = 0,
 	        hi = array.length - 1,
 	        mid,
-	        element;
+	        element,
+	        results = [];
 	    while (lo <= hi) {
 	        mid = ((lo + hi) >> 1);
 	        element = array[mid];
@@ -31,10 +32,14 @@
 	        } else if (element > key) {
 	            hi = mid - 1;
 	        } else {
-	            return (array[mid]===key ? mid : -1);
+	            while(array[mid]===key) {
+	            	results.push(mid);
+	            	mid++;
+	            }
+	            return results;
 	        }
 	    }
-	    return -1;
+	    return results;
 	}
 	/*
 	 * https://github.com/Benvie
@@ -94,7 +99,94 @@
 			 
 				return result;
 	}
-	
+	function joqularMatch(pattern,scope) {
+		scope || (scope = [this]);
+		var me = this;
+		if(pattern===undefined || pattern.valueOf()===undefined) {
+			return null;
+		}
+		if(pattern===me || pattern===me.valueOf() || (pattern!=null && pattern.valueOf()===me.valueOf())) {
+			return me;
+		}
+		if(typeof(pattern)==="function" && pattern.deferred) {
+			pattern = pattern.call(this,this.valueOf());
+		}
+		if(pattern instanceof Object) {
+//			if(typeof(pattern)==="function" && pattern.predicate) {
+//				if(pattern.length===0) {
+//					if(me.valueOf()===pattern()) {
+//						return me;
+//					}
+//				} else if(pattern(me.valueOf())) {
+//					return me;
+//				}
+//			}
+			if(pattern.$ && typeof(pattern.$)==="function") {
+				if(pattern.$(me.valueOf())) {
+					return me;
+				}
+				return null;
+			}
+			scope.push(me);
+			if(Object.keys(pattern).every(function(key) {
+				var value1 = toObject(me[key]);
+				var value2 = pattern[key];
+				if(value1!==undefined) {
+					if(value2 instanceof Object) {
+						if(typeof(value2)==="function" && value2.deferred) {
+							value2 = value2(value1);
+						} else {
+							let path;
+							for(var possiblepath in value2) {
+								let anchor;
+								if(possiblepath.indexOf("/")===0) {
+									anchor = scope[0];
+									path = possiblepath.substring(1).split(".");
+								} else if(possiblepath.indexOf("..")===0) {
+									let i = scope.length-3;
+									if(i<0) { return false; }
+									anchor = scope[i];
+									path = possiblepath.substring(2).split(".");
+								} else if(possiblepath.indexOf(".")===0) {
+									let i = scope.length-2;
+									if(i<0) { return false; }
+									anchor = scope[i];
+									path = possiblepath.substring(1).split(".");
+								}
+								if(anchor) {
+									for(let i=0;i<path.length-2;i++) {
+										anchor = anchor[path[i]];
+										if(anchor==null) {
+											return false;
+										}
+									}
+									value2 = anchor[value2[possiblepath]];
+								}
+							}
+						}
+					}
+					//if(key==="@" && value1 instanceof Object) {
+					//	if(value1.history instanceof History) {
+					//		return value1.history.joqularMatch(value2);
+					//	}
+					//	return false;
+					//}
+					return (value1===value2===null || 
+						value1===value2===undefined ||
+						value1.valueOf()===value2.valueOf() || 
+						(typeof(value1)==="function" && value1.predicate && value1.call(me,value2)) ||
+						(typeof(value1)!=="function" && value1.joqularMatch && value1.joqularMatch(value2,scope)));
+				}
+				return false;
+			})) {
+				scope.pop();
+				return this;
+			}
+			scope.pop();
+			return null;
+		}
+		return null;
+	};
 	function joqularValues(index,key,type) {
 		if(!index[key][type].joqularValues) {
 			var desc = Object.getOwnPropertyDescriptor(index[key][type],"joqularValues");
@@ -243,7 +335,11 @@
 					ids.forEach(function(id) {
 						if(id!=="predicate") {
 							if(constructor.ids[id]) {
-								if(constructor.ids[id][key][subkey](value)) {
+								if(constructor.ids[id][key][subkey].length===0) {
+									if(constructor.ids[id][key][subkey]()===value) {
+										matches.push(constructor.ids[id]);
+									}
+								} else if(constructor.ids[id][key][subkey](value)) {
 									matches.push(constructor.ids[id]);
 								}
 							} else {
@@ -281,7 +377,7 @@
 							let values =  joqularValues(index,key,type);
 							// instance values are in ascending order so we can do some optimizations
 							if(test==="eq") {
-								let i = values.bsearch(value);
+								let i = values.bsearch(value)[0];
 								if(i>=0) {
 									let instancevalue = values[i];
 									var ids = Object.keys(index[key][type][instancevalue]);
@@ -358,10 +454,19 @@
 	}
 	var JOQULAR = {
 			enhance: function(constructor,config) {
-				function createIndex(cons,async,name) {
+				function createIndex(cons,auto,async,name) {
+					auto = (auto===undefined ? true : auto);
 					name || (name = cons.name);
-					var newcons = Function("root","cons","async","return function " + name + "() {var me = this;if(!(me instanceof " + name + ")) { me = new " + name + "(); } cons.apply(me,arguments); me.constructor = " + name + "; return " + name + ".joqularIndex(me,async); }")(constructor,cons,async);
-					var keys = Object.getOwnPropertyNames(cons);
+					var newcons = Function("root","cons","auto","async","return function " + name + "() {var me = this;if(!(me instanceof " + name + ")) { me = new " + name + "(); } cons.apply(me,arguments); Object.defineProperty(me,'constructor',{enumerable:false,value:" + name + "}); return (auto ? " + name + ".joqularIndex(me,async) : me); }")(constructor,cons,auto,async);
+					var keys = Object.getOwnPropertyNames(constructor);
+					keys.forEach(function(key) {
+						try {
+							newcons[key] = constructor[key];
+						} catch(e) {
+							
+						}
+					});
+					keys = Object.getOwnPropertyNames(cons);
 					keys.forEach(function(key) {
 						try {
 							newcons[key] = cons[key];
@@ -374,13 +479,113 @@
 					newcons.index = {};
 					newcons.indexing = {};
 					newcons.prototype = Object.create(cons.prototype);
+					if(config.datastore && config.datastore.name && config.datastore.type==="IndexedDB") {
+						newcons.persist = function(aysnch) {
+							var me = this;
+							me.dbVersion || (me.dbVersion = 1);
+							var dbrequest = indexedDB.open(config.datastore.name,me.dbVersion);
+							dbrequest.onupgradeneeded = function(event) {
+								var db = event.target.result;
+								if(!db.objectStoreNames.contains(name)) {
+									db.createObjectStore(name, {  autoIncrement : true });
+								}
+							};
+							dbrequest.onblocked = function(event) {
+								console.log(event);
+							};
+							dbrequest.onerror = function(event) {
+								if(event.target.error.name==="VersionError" && event.target.error.message.indexOf(" less ")>=0) {
+									event.cancelBubble = true;
+									me.dbVersion++;
+									me.persist();
+								}
+							};
+							dbrequest.onsuccess = function(event) {
+								var db = event.target.result, objectstore;
+								if(!db.objectStoreNames.contains(name)) {
+									db.close();
+									me.dbVersion++;
+									me.persist();
+								} else {
+									objectstore = db.transaction(name, "readwrite").objectStore(name);
+									var request = objectstore.get("root");
+									request.onsuccess = function(event) {
+										var object = request.result;
+										if(!object) {
+											objectstore.add({ids:me.ids,index:me.index},"root");
+										} else {
+											object.ids = me.ids;
+											object.index = me.index;
+											objectstore.put(object,"root");
+										}
+										db.close();
+									};
+								}
+							};
+						}
+						newcons.load = function(aysnch) {
+							var me = this;
+							me.dbVersion || (me.dbVersion = 1);
+							var dbrequest = indexedDB.open(config.datastore.name,me.dbVersion);
+							dbrequest.onupgradeneeded = function(event) {
+								var db = event.target.result;
+								if(!db.objectStoreNames.contains(name)) {
+									db.createObjectStore(name, {  autoIncrement : true });
+								}
+							};
+							dbrequest.onblocked = function(event) {
+								console.log(event);
+							};
+							dbrequest.onerror = function(event) {
+								if(event.target.error.name==="VersionError" && event.target.error.message.indexOf(" less ")>=0) {
+									event.cancelBubble = true;
+									me.dbVersion++;
+									me.load();
+								}
+							};
+							dbrequest.onsuccess = function(event) {
+								var db = event.target.result, objectstore;
+								if(!db.objectStoreNames.contains(name)) {
+									db.close();
+									me.dbVersion++;
+									me.load();
+								} else {
+									objectstore = db.transaction(name).objectStore(name);
+									var request = objectstore.get("root");
+									request.onsuccess = function(event) {
+										var object = request.result;
+										if(object) {
+											me.ids = {};
+											var keys = Object.keys(object.ids);
+											keys.forEach(function(id) {
+												if(id!=="nextId") {
+													me.ids[id] = Object.create(me.prototype);
+													for(var property in object.ids[id]) {
+														me.ids[id][property] = object.ids[id][property];
+													}
+													Object.defineProperty(me.ids[id],"constructor",{enumerable:false,value:me});
+													me.ids.nextId = parseInt(id)+1;
+												}
+											});
+											me.index = object.index;
+										} else {
+											me.ids = {};
+											me.ids.nextId = 0;
+											me.index = {};
+										}
+										db.close();
+									};
+								}
+							};
+						}
+					}
 					return newcons;
 				}
 				if(config.index===true) {
 					config.enhancePrimitives = true;
 					config.enhanceArray = true;
 					config.ehhanceDate = true;
-					constructor.prototype.joqularFind = function(pattern,wait) {
+					constructor.joqularFind = function(pattern,wait) {
 						var me = this;
 						if(wait) {
 							function dowait(f) {
@@ -400,7 +605,7 @@
 						}
 						return joqularFind.call(me,pattern,me.index);
 					};
-					constructor.prototype.joqularIndex = function(instance,async) {
+					constructor.joqularIndex = function(instance,async) {
 						var me = this;
 						var id = me.ids.nextId;
 						me.ids.nextId++;
@@ -625,83 +830,7 @@
 					return 0;
 				}).predicate = true;
 				constructor.prototype.joqularMatch = function(pattern,scope) {
-					scope || (scope = [this]);
-					var me = this;
-					if(pattern===undefined || pattern.valueOf()===undefined) {
-						return null;
-					}
-					if(pattern===me || pattern===me.valueOf() || (pattern!=null && pattern.valueOf()===me.valueOf())) {
-						return me;
-					}
-					if(typeof(pattern)==="function" && pattern.deferred) {
-						pattern = pattern.call(this,this.valueOf());
-					}
-					if(pattern instanceof Object) {
-						if(typeof(pattern)==="function" && pattern.predicate && pattern(me.valueOf())) {
-							return me;
-						}
-						if(pattern.$ && typeof(pattern.$)==="function" && pattern.$.predicate && pattern.$(me.valueOf())) {
-							return me;
-						}
-						scope.push(me);
-						if(Object.keys(pattern).every(function(key) {
-							var value1 = toObject(me[key]);
-							var value2 = pattern[key];
-							if(value1!==undefined) {
-								if(value2 instanceof Object) {
-									if(typeof(value2)==="function" && value2.deferred) {
-										value2 = value2(value1);
-									} else {
-										let path;
-										for(var possiblepath in value2) {
-											let anchor;
-											if(possiblepath.indexOf("/")===0) {
-												anchor = scope[0];
-												path = possiblepath.substring(1).split(".");
-											} else if(possiblepath.indexOf("..")===0) {
-												let i = scope.length-3;
-												if(i<0) { return false; }
-												anchor = scope[i];
-												path = possiblepath.substring(2).split(".");
-											} else if(possiblepath.indexOf(".")===0) {
-												let i = scope.length-2;
-												if(i<0) { return false; }
-												anchor = scope[i];
-												path = possiblepath.substring(1).split(".");
-											}
-											if(anchor) {
-												for(let i=0;i<path.length-2;i++) {
-													anchor = anchor[path[i]];
-													if(anchor==null) {
-														return false;
-													}
-												}
-												value2 = anchor[value2[possiblepath]];
-											}
-										}
-									}
-								}
-								//if(key==="@" && value1 instanceof Object) {
-								//	if(value1.history instanceof History) {
-								//		return value1.history.joqularMatch(value2);
-								//	}
-								//	return false;
-								//}
-								return (value1===value2===null || 
-									value1===value2===undefined ||
-									value1.valueOf()===value2.valueOf() || 
-									(typeof(value1)==="function" && value1.predicate && value1.call(me,value2)) ||
-									(typeof(value1)!=="function" && value1.joqularMatch && value1.joqularMatch(value2,scope)));
-							}
-							return false;
-						})) {
-							scope.pop();
-							return this;
-						}
-						scope.pop();
-						return null;
-					}
-					return null;
+					return joqularMatch.call(this,pattern,scope);
 				};
 				(constructor.prototype.instanceof = function(constructor) {
 					return this instanceof constructor;
@@ -801,6 +930,29 @@
 					Array.prototype.count = function() {
 						return this.length;
 					};
+					Array.prototype.avg = function() {
+						return this.sum() / this.count();
+					}
+					Array.prototype.sum = function(ignoreEnds) {
+						var sum = 0;
+						for(let i=0;i<this.length;i++) {
+							if(ignoreEnds && (i===0 || i===this.length-1)) continue;
+							sum += (this[i]!=null && typeof(this[i].valueOf())==="number" ? this[i].valueOf() : 0);
+						}
+						return sum;
+					}
+					Array.prototype.min = function(ignoreEnds) {
+						var i = 0;
+						if(ignoreEnds) i++;
+						var copy = this.filter(function(item) { return item && typeof(item.valueOf())==="number" && !isNaN(item.valueOf()); }).sort(function(a,b) { return a - b;});
+						return copy[i];
+					}
+					Array.prototype.max = function(ignoreEnds) {
+						var i = this.length-1;
+						if(ignoreEnds) i--;
+						var copy = this.filter(function(item) { return item && typeof(item.valueOf())==="number" && !isNaN(item.valueOf()); }).sort(function(a,b) { return a - b;});
+						return copy[i];
+					}
 					Array.prototype.bsearch = function(value) {
 						return binarySearch(this,value);
 					};
