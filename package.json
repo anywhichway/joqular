@@ -1,7 +1,7 @@
 {
   "name": "joqular",
-  "version":"0.0.92",
-  "description": "(JOQULAR - JavaScript Object Query Labguage Representation) A high speed in-memory, isomophic, JavaScript database wih seriliazable queries.",
+  "version":"0.0.93",
+  "description": "(JOQULAR - JavaScript Object Query Labguage Representation) A high speed in-memory, isomorphic, JavaScript database wih serializable queries.",
   "main": "joqular.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

@@ -21,3 +21,4 @@ npm install joqular
 # updates
 
 2015-04-25 Initial public release v0.0.92 (626 Unit tests and growing ...)
+2015-04-25 Initial public release v0.0.93 (626 Unit tests and growing ...) corrected typos in npm package
