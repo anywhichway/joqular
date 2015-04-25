@@ -1,10 +1,41 @@
 (function(exports) {
 	"use strict";
+	function toPredicate(f) {
+		var predicate = function() {
+			if(arguments[0] instanceof Array && f.length>1) {
+				return f.apply(this,arguments[0]);
+			}
+			return f.apply(this,arguments);
+		};
+		predicate.predicate = true;
+		return predicate;
+	}
+	function toProvider(f) {
+		f.provider = true;
+		return f;
+	}
+	function Null() {
+		
+	}
+	(Null.prototype.eq = function(value) { return value===null; }).predicate = true;
+	(Null.prototype.neq = function(value) { return value!==null; }).predicate = true;
+	(Null.prototype["in"] = function(value) {
+		return value && value.contains && value.contains(this);
+	}).predicate=true;
+	(Null.prototype.nin = function(value) {
+		return !value || !value.contains || !value.contains(this);
+	}).predicate=true;
+	Null.prototype.valueOf = function() { return null; }
+	var NULL = new Null();
+	
 	function toObject(value) {
-		if(value===null || value===undefined) {
-			return value;
+		if(value===undefined) {
+			return undefined;
 		}
-		if(value instanceof Object) {
+		if(value===null) {
+			return NULL;
+		}
+		if(typeof(value)==="object" || typeof(value)==="function") {
 			return value;
 		}
 		var type = typeof(value);
@@ -15,8 +46,34 @@
 		}
 		return undefined; // should this actually throw an error?
 	}
+	// soundex from https://gist.github.com/shawndumas/1262659
+	function soundex(s) {
+	     var a = s.toLowerCase().split(''),
+	         f = a.shift(),
+	         r = '',
+	         codes = {
+	             a: '', e: '', i: '', o: '', u: '',
+	             b: 1, f: 1, p: 1, v: 1,
+	             c: 2, g: 2, j: 2, k: 2, q: 2, s: 2, x: 2, z: 2,
+	             d: 3, t: 3,
+	             l: 4,
+	             m: 5, n: 5,
+	             r: 6
+	         };
+	 
+	     r = f +
+	         a
+	         .map(function (v, i, a) { return codes[v] })
+	         .filter(function (v, i, a) {
+	             return ((i === 0) ? v !== codes[f] : v !== a[i - 1]);
+	         })
+	         .join('');
+	 
+	     return (r + '000').slice(0, 4).toUpperCase();
+	}
 	/*
 	* http://www.anujgakhar.com/2014/03/01/binary-search-in-javascript/
+	* Improvements 2015 by AnyWhichWay
 	*/
 	function binarySearch(array, key) {
 	    var lo = 0,
@@ -32,9 +89,12 @@
 	        } else if (element > key) {
 	            hi = mid - 1;
 	        } else {
-	            while(array[mid]===key) {
+	            if(array[mid]===key || (key && array[mid]===key.valueOf())) {
 	            	results.push(mid);
-	            	mid++;
+	            	while(array[mid]===key || (key && array[mid]===key.valueOf())) {
+		            	mid++;
+					}
+	            	results.push(mid-1);
 	            }
 	            return results;
 	        }
@@ -43,6 +103,7 @@
 	}
 	/*
 	 * https://github.com/Benvie
+	 * improvements 2015 by AnyWhichWay
 	 */
 	function intersection(array) {
 			var arrays = arguments.length;
@@ -111,16 +172,7 @@
 		if(typeof(pattern)==="function" && pattern.deferred) {
 			pattern = pattern.call(this,this.valueOf());
 		}
-		if(pattern instanceof Object) {
-//			if(typeof(pattern)==="function" && pattern.predicate) {
-//				if(pattern.length===0) {
-//					if(me.valueOf()===pattern()) {
-//						return me;
-//					}
-//				} else if(pattern(me.valueOf())) {
-//					return me;
-//				}
-//			}
+		if(pattern!=null && typeof(pattern)==="object") {
 			if(pattern.$ && typeof(pattern.$)==="function") {
 				if(pattern.$(me.valueOf())) {
 					return me;
@@ -129,38 +181,50 @@
 			}
 			scope.push(me);
 			if(Object.keys(pattern).every(function(key) {
-				var value1 = toObject(me[key]);
-				var value2 = pattern[key];
+				if(key==="forall" || key==="exists") {
+					return true;
+				}
+				var value1 = toObject(me[key]), value2 = pattern[key], type = typeof(value2);
 				if(value1!==undefined) {
-					if(value2 instanceof Object) {
-						if(typeof(value2)==="function" && value2.deferred) {
+					if(value2!=null &&  (type==="object" || type==="function")) {
+						if(type==="function" && value2.deferred) {
 							value2 = value2(value1);
+							type = typeof(value2);
 						} else {
-							let path;
-							for(var possiblepath in value2) {
-								let anchor;
+							var path;
+							var possiblepath = Object.keys(value2)[0];
+							if(possiblepath) {
+								var anchor = null;
 								if(possiblepath.indexOf("/")===0) {
 									anchor = scope[0];
 									path = possiblepath.substring(1).split(".");
+									if(path[0]==="") {
+										path.shift();
+									}
 								} else if(possiblepath.indexOf("..")===0) {
-									let i = scope.length-3;
-									if(i<0) { return false; }
-									anchor = scope[i];
+									if(scope.length-3<0) { return false; }
+									anchor = scope[scope.length-3];
 									path = possiblepath.substring(2).split(".");
+									if(path[0]==="") {
+										path.shift();
+									}
 								} else if(possiblepath.indexOf(".")===0) {
-									let i = scope.length-2;
-									if(i<0) { return false; }
-									anchor = scope[i];
+									if(scope.length-2<0) { return false; }
+									anchor = scope[scope.length-2];
 									path = possiblepath.substring(1).split(".");
+									if(path[0]==="") {
+										path.shift();
+									}
 								}
 								if(anchor) {
-									for(let i=0;i<path.length-2;i++) {
+									path.push(value2[possiblepath]);
+									for(var i=0;i<path.length;i++) {
 										anchor = anchor[path[i]];
-										if(anchor==null) {
+										if(anchor===undefined) {
 											return false;
 										}
 									}
-									value2 = anchor[value2[possiblepath]];
+									value2 = anchor;
 								}
 							}
 						}
@@ -171,10 +235,12 @@
 					//	}
 					//	return false;
 					//}
-					return (value1===value2===null || 
-						value1===value2===undefined ||
-						value1.valueOf()===value2.valueOf() || 
+					return (value1===value2 || 
+						(value1!=null && value1.valueOf()===value2) ||
+						(value2!=null && value1===value2.valueOf()) || 
+						(value1!=null && value2!=null && value1.valueOf()===value2.valueOf()) ||
 						(typeof(value1)==="function" && value1.predicate && value1.call(me,value2)) ||
+						(typeof(value1)==="function" && value1.provider && value1.call(me)===value2) ||
 						(typeof(value1)!=="function" && value1.joqularMatch && value1.joqularMatch(value2,scope)));
 				}
 				return false;
@@ -187,84 +253,96 @@
 		}
 		return null;
 	};
-	function joqularValues(index,key,type) {
-		if(!index[key][type].joqularValues) {
-			var desc = Object.getOwnPropertyDescriptor(index[key][type],"joqularValues");
-			if(!desc) {
-				Object.defineProperty(index[key][type],"joqularValues",{enumerable:false,configurable:false,writable:true,value:null}); // create hidden value cache if does not exist, hidden so does not show in own keys
-			}
-			var values = Object.keys(index[key][type]);
-			switch(type) {
-			case "number": values.sort(function(a,b) { return a - b; }); break;
-			case "boolean": values.sort(); break;
-			case "string": values.sort(); break;
-			}
-			index[key][type].joqularValues = values;
+	function joqularValues(scope,type) {
+		if(!scope || !scope[type]) {
+			return [];
 		}
-		return index[key][type].joqularValues;
+		if(!scope[type].joqularValues) {
+			var values = Object.keys(scope[type]);
+			switch(type) {
+			case "number": values.forEach(function(value,i) { if(value!=="joqularValues") { values[i] = parseFloat(value); }}); values.sort(function(a,b) { return a - b; }); break;
+			case "boolean": values.forEach(function(value,i) { if(value!=="joqularValues") { values[i] = (value==="true"); }}); values.sort(); break;
+			case "string": values.sort(); break;
+			case "undefined": values = [null]; break;
+			}
+			Object.defineProperty(scope[type],"joqularValues",{enumerable:false,configurable:true,writable:true,value:values});
+		}
+		return scope[type].joqularValues;
 	}
 	function joqularIndexValue(id,value,index,key,type) {
 		index[key] || (index[key] = {});
 		index[key][type] || (index[key][type] = {});
 		index[key][type][value] || (index[key][type][value] = {});
 		index[key][type][value][id] = 1;
-		index[key][type].joqularValues = null; // remove cached values, they will be regenerated by first query
+		delete index[key][type].joqularValues; // remove cached values, they will be regenerated by first query
 	}
 	function joqularIndexFunction(id,func,index,key) {
-		if(func.predicate) {
-			index[key] || (index[key] = {});
-			index[key]["function"] || (index[key]["function"] = {});
-			index[key]["function"].predicate = true;
-			index[key]["function"][id] || (index[key]["function"][id] = {});
-			index[key]["function"][id] = 1;
+		if(func.predicate || func.provider) {
+			index["function"] || (index["function"] = {});
+			(index["function"][key] && typeof(index["function"][key])!=="function") || (index["function"][key] = {}); // index is a dumb object, so if there is a function, ok to overwrite
+			index["function"][key][id] = 1;
 		}
 	}
-	function joqularIndex(id,instance,index) {
-		//var s = JSON.stringify(instance);
-		//console.time("joqularIndex " + id + " " + s);
+	function joqularIndex(id,instance,index,blockObserve) {
+		blockObserve = (blockObserve===undefined ? false : blockObserve);
 		var constructor = this;
 		if(instance==null || typeof(instance)==="function") {
 			return;
 		}
-		Object.observe(instance,function(changes) { 
-			joqularUpdate.call(constructor,id,changes,index);
+		if(!blockObserve) {
+			Object.observe(instance,function(changes) { 
+				joqularUpdate.call(constructor,id,changes,index);
 			});
+		}
+		var instancetype = typeof(instance.valueOf());
 		var keys = Object.getOwnPropertyNames(instance);
 		keys = keys.concat(Object.getOwnPropertyNames(Object.getPrototypeOf(instance)));
-		keys.filter(function(key) {
+		keys = keys.filter(function(key) {
+			if(key==="__proto__") {
+				return false;
+			}
 			var value = instance[key], type = typeof(value);
 			if(type==="function") {
-				return value.predicate;
+				return value.predicate || value.provider;
+			}
+			if(instancetype==="string") {
+				return isNaN(parseInt(key));
 			}
 			return true;
 		});
 		keys.forEach(function(key) {
-			var value = instance[key];
+			var value = instance[key], type;
 			if(value!==undefined) {
-				var type = typeof(value);
-				if(value instanceof Object) {
-					if(type==="function") {
-						joqularIndexFunction.call(constructor,id,value,index,key);
-					} else {
-						index[key] || (index[key] = {});
-						joqularIndex.call(constructor,id,value,index[key]);
-					}
+				if(value===null) {
+					type = "undefined";
 				} else {
-					if(value === null) {
-						type = "undefined";
-					}
+					value = value.valueOf();
+					type = typeof(value);
+				}
+				if(type==="function") {
+					joqularIndexFunction.call(constructor,id,value,index,key);
+				} else if(value!=null && type==="object" && instance===instance.valueOf()){ // instance!==instance.valueOf() for primitive types, need this to stop recursion
+					index[key] || (index[key] = {});
+					joqularIndex.call(constructor,id,value,index[key]);
+				} else if(value===null || type!=="object") {
+					index[key] || (index[key] = {});
+					joqularIndex.call(constructor,id,toObject(value),index[key],true);
+				}
+				if(value===null) {
+					type = "undefined";
+				}
+				if(["number","boolean","string","undefined"].indexOf(type)>=0) {
 					joqularIndexValue.call(constructor,id,value,index,key,type);
 				}
 			}
 		});
-		//console.timeEnd("joqularIndex " + id + " " + s);
 	}
 	function joqularUpdate(id,changes,index) {
 		var constructor = this;
 		changes.forEach(function(change) {
 			var key = change.name, value = change.object[key];
 			if(change.type==="update" || change.type==="delete") {
-				let type = typeof(change.oldValue);
+				var type = typeof(change.oldValue);
 				if(change.oldValue instanceof Object) {
 					joqularDelete.call(constructor,id,change.oldValue,index[key]);
 				} else if(index[key][type][change.oldValue]) {
@@ -275,7 +353,7 @@
 				index[key]={};
 			}
 			if(change.type==="update" || change.type==="add") {
-				let value = change.object[key],type = typeof(value);
+				var value = change.object[key],type = typeof(value);
 				if(value instanceof Object) {
 					if(type==="function") {
 						joqularIndexFunction.call(constructor,value,index,key);
@@ -305,150 +383,268 @@
 			});
 		}
 	}
-	function joqularFind(pattern,index,results) {
-		if(pattern==null || index==null) {
-			return [];
-		}
-		var constructor = this;
-		var keys = Object.keys(pattern);
+	function joqularFind(pattern,index,rootpattern,results,scope,scopekey,out) {
+		if(pattern==null || index==null) return [];
+		rootpattern || (rootpattern = pattern);
+		out || (out = {});
+		var constructor = this, keys = Object.keys(pattern);
+		if(pattern instanceof Date) keys.push("time");
 		keys.every(function(key) {
-			var value = pattern[key], type = typeof(value), subkey, matches = [], test;
+			var value = pattern[key], type, matches = [], firstsubkey, subisref = false;
 			if(value === null) {
 				type = "undefined";
+			} else {
+				value = value.valueOf();
+				type = typeof(value);
 			}
-			if(value instanceof Object) {
-				var subkey = Object.keys(value)[0], test;
-				if(["lt","lte","eq","neq","gte","gt"].indexOf(subkey)>=0) {
-					test = subkey;
-					value = value[subkey];
-					if(value===null) {
-						type = "undefined";
-					} else {
-						type = typeof(value);
+			if(index[key] && index[key][type] && index[key][type][value]) {
+				var ids = Object.keys(index[key][type][value]);
+				ids.forEach(function(id) {
+					if(out[id]) return;
+					if(constructor.ids[id]) {
+						if(constructor.ids[id].joqularMatch(rootpattern)) {
+							matches.push(constructor.ids[id]);
+							return;
+						}
+						out[id] = true;
 					}
-					if(value instanceof Object) {
-						return false;
-					}
-				} else if(index[key] && index[key][subkey] && index[key][subkey]["function"] && index[key][subkey]["function"].predicate) {
-					let ids = Object.keys(index[key][subkey]["function"]);
-					value = value[subkey];
+					delete index[key][type][value][id];
+				});
+				results = (results ? intersection(results,matches) : matches);
+				return results.length > 0;
+			}
+			if(type==="object") {
+				firstsubkey = Object.keys(value)[0];
+				subisref = (firstsubkey && (firstsubkey.indexOf("/")===0 || firstsubkey.indexOf(".")===0));
+			}
+			if(type!=="object" && type!=="function" && ["lt","lte","eq","neq","gte","gt"].indexOf(key)>=0) {
+				var test = key;
+				// ugh, table scan because there are no records selected yet and there might be a null value in the database
+				if(test==="neq" && !results) {
+					results = [];
+					var ids = Object.keys(constructor.ids);
 					ids.forEach(function(id) {
-						if(id!=="predicate") {
-							if(constructor.ids[id]) {
-								if(constructor.ids[id][key][subkey].length===0) {
-									if(constructor.ids[id][key][subkey]()===value) {
-										matches.push(constructor.ids[id]);
-									}
-								} else if(constructor.ids[id][key][subkey](value)) {
-									matches.push(constructor.ids[id]);
-								}
-							} else {
-								delete index[key][subkey]["function"][id];
+						if(id!="nextId") {
+							if(constructor.ids[id].joqularMatch(rootpattern)) {
+								results.push(constructor.ids[id]);
+								return;
 							}
+							out[id] = true;
 						}
 					});
-					results = (results ? intersection(results,matches) : matches);
-					return results.length > 0;
-				} else {
-					let subresults = joqularFind.call(constructor,pattern[key],index[key],results);
-					results = (results ? intersection(results,subresults) : subresults);
-					return results.length>0;
+					return results.length > 1;
 				}
-			}
-			if(index[key]) {
-				if(index[key][type] && index[key][type][value] instanceof Object) {
-					let ids = Object.keys(index[key][type][value])
+				var types = (type==="undefined" ? ["string","number","boolean","undefined"] : [type]);
+				types.forEach(function(type) {
+					var values = joqularValues(scope[scopekey],type), ids = [];
+					if(values.length===0) return;
+					// instance values are in ascending order so we can do some optimizations
+					if(test==="eq") {
+						var i = values.bsearch(value)[0];
+						if(i>=0) {
+							var instancevalue = values[i];
+							ids = Object.keys(scope[scopekey][type][instancevalue]);
+						}
+					} else if(["lt","lte","neq"].indexOf(test)>=0) {
+						for(var i=0;i<values.length;i++) {
+							var instancevalue = values[i];
+							if(test==="lt") {
+								if(instancevalue < value) {
+									ids = ids.concat(Object.keys(scope[scopekey][type][instancevalue]));
+									continue;
+								}
+								break;
+							} else if(test==="lte") {
+								if(instancevalue <= value) {
+									ids = ids.concat(Object.keys(scope[scopekey][type][instancevalue]));
+									continue;
+								}
+								break;
+							} else { //neq
+								if(instancevalue !== value) {
+									ids = ids.concat(Object.keys(scope[scopekey][type][instancevalue]));
+								}
+								continue;
+							}
+						}
+					} else { // gte, gt}
+						for(var i=values.length-1;i>=0;i--) {
+							var instancevalue = values[i];
+							if(test==="gte") {
+								if(instancevalue >= value) {
+									ids = ids.concat(Object.keys(scope[scopekey][type][instancevalue]));
+									continue;
+								}
+								break;
+							} else if(test==="gt") {
+								if(instancevalue > value) {
+									ids = ids.concat(Object.keys(scope[scopekey][type][instancevalue]));
+									continue;
+								}
+								break;
+							}
+						}
+					}
 					ids.forEach(function(id) {
+						if(out[id]) return;
 						if(constructor.ids[id]) {
-						//	if(index[key][type][value][id].joqularMatch(pattern)) {
+							if(constructor.ids[id].joqularMatch(rootpattern)) {
 								matches.push(constructor.ids[id]);
-						//	}
-						} else {
-							delete index[key][type][value][id];
-						}
-					});
-					results = (results ? intersection(results,matches) : matches);
-					return results.length > 0;
-				} else if(!(index[key][type] && index[key][type][value] instanceof Object)) {
-					test || (test = "eq");
-					let types = (type==="undefined" ? ["string","number","boolean","undefined"] : [type]);
-					types.forEach(function(type) {
-						if(index[key][type]) {
-							let values =  joqularValues(index,key,type);
-							// instance values are in ascending order so we can do some optimizations
-							if(test==="eq") {
-								let i = values.bsearch(value)[0];
-								if(i>=0) {
-									let instancevalue = values[i];
-									var ids = Object.keys(index[key][type][instancevalue]);
-									ids.forEach(function(id) {
-										if(constructor.ids[id]) {
-										//	if(index[key][type][instancevalue][id].joqularMatch(pattern)) {
-												matches.push(constructor.ids[id]);
-										//	}
-										} else {
-											delete index[key][type][instancevalue][id];
-										}
-									});
-								}
-							} else if(["lt","lte","neq"].indexOf(test)>=0) {
-								for(let i=0;i<values.length;i++) {
-									let instancevalue = values[i];
-									if(test==="lt") {
-										if(!(instancevalue < value)) {
-											break;
-										}
-									} else if(test==="lte") {
-										if(!(instancevalue <= value)) {
-											break;
-										}
-									} else { //neq
-										if(!(instancevalue !== value)) {
-											continue;
-										}
-									}
-									let ids = Object.keys(index[key][type][instancevalue]);
-									ids.forEach(function(id) {
-										if(constructor.ids[id]) {
-											//if(index[key][type][instancevalue][id].joqularMatch(pattern)) {
-												matches.push(constructor.ids[id]);
-											//}
-										} else {
-											delete index[key][type][instancevalue][id];
-										}
-									});
-								}
-							} else { // gte, gt}
-								for(let i=values.length-1;i>0;i--) {
-									let instancevalue = values[i];
-									if(test==="gte") {
-										if(!(instancevalue >= value)) {
-											break;
-										}
-									} else if(test==="gt") {
-										if(!(instancevalue > value)) {
-											break;
-										}
-									}
-									let ids = Object.keys(index[key][type][instancevalue]);
-									ids.forEach(function(id) {
-										if(constructor.ids[id]) {
-										//	if(index[key][type][instancevalue][id].joqularMatch(pattern)) {
-												matches.push(constructor.ids[id]);
-										//	}
-										} else {
-											delete index[key][type][instancevalue][id];
-										}
-									});
-								}
+								return;
 							}
+							out[id] = true;
 						}
+						delete scope[scopekey][type][instancevalue][id];
 					});
-					results = (results ? intersection(results,matches) : matches);
-					return results.length > 0;
+				});
+				results = (results ? intersection(results,matches) : matches);
+				return results.length > 0;
+			}
+			if(key==="forall" && type=="function") {
+				if(results) {
+					if(results.every(function(object) {
+						if(value(object)) {
+							matches.push(object);
+							return true;
+						}
+						return false;
+					})) {
+						results = (results ? intersection(results,matches) : matches);
+						return results.length > 0;
+					}
+					matches = [];
+					results = [];
+					return false;
+				} else {
+					var ids = Object.keys(constructor.ids);
+					if(ids.every(function(id) {
+						if(id==="nextId") return true;
+						if(value(constructor.ids[id])) {
+							matches.push(constructor.ids[id]);
+							return true;
+						}
+						return false;
+					})) {
+						results = matches;
+						return results.length > 0;
+					}
+					matches = [];
+					results = [];
+					return false;
 				}
 			}
-			return false;
+			if(key==="exists" && type=="function") {
+				if(results) {
+					if(results.some(function(object) {
+						if(value(object)) {
+							return true;
+						}
+						return false;
+					})) {
+						return results.length > 0;
+					}
+					matches = [];
+					results = [];
+					return false;
+				} else {
+					var ids = Object.keys(constructor.ids);
+					if(ids.some(function(id) {
+						if(id==="nextId") return false;
+						if(value(constructor.ids[id])) {
+							return true;
+						}
+						return false;
+					})) {
+						results = [];
+						ids.forEach(function(id) {
+								results.push(constructor.ids[id]);
+						});
+						return results.length > 0;
+					}
+					matches = [];
+					results = [];
+					return false;
+				}
+			}
+			if(scopekey && key==="$" && type==="function") {
+				var f = value;
+				["string","number","boolean","undefined"].forEach(function(type) {
+					var values =  joqularValues(scope[scopekey],type);
+					values.forEach(function(value) {
+						if(f(value)) {
+							var ids = Object.keys(scope[scopekey][type][value]);
+							ids.forEach(function(id) {
+								if(id!="nextId") {
+									if(constructor.ids[id]) {
+										if(constructor.ids[id].joqularMatch(rootpattern)) {
+											matches.push(constructor.ids[id]);
+											return;
+										}
+										out[id] = true;
+									} else {
+										delete scope[scopekey][type][value][id];
+									}
+								}
+							});
+						}
+					});
+				});
+				results = (results ? intersection(results,matches) : matches);
+				return results.length > 0;
+			}
+			if(scopekey && (subisref || key.indexOf("/")===0 || key.indexOf(".")===0)) {
+				if(!results) {
+					results = [];
+					var ids = Object.keys(constructor.ids);
+					ids.forEach(function(id) {
+						if(id!="nextId") {
+							if(constructor.ids[id].joqularMatch(rootpattern)) {
+								results.push(constructor.ids[id]);
+								return;
+							}
+							out[id] = true;
+						}
+					});
+				} else {
+					results = results.filter(function(object) {
+					return object.joqularMatch(rootpattern);
+					});
+				}
+				return results.length > 0;
+			}
+			if(scopekey && scope[scopekey]["function"] && scope[scopekey]["function"][key]) {
+				var ids = Object.keys(scope[scopekey]["function"][key]);
+				ids.forEach(function(id) {
+					if(constructor.ids[id]) {
+						if(constructor.ids[id][scopekey] && typeof(constructor.ids[id][scopekey][key])==="function") {
+							if(constructor.ids[id][scopekey][key].provider) {
+								if(constructor.ids[id][scopekey][key]()===value) {
+									if(constructor.ids[id].joqularMatch(rootpattern)) {
+										matches.push(constructor.ids[id]);
+										return;
+									}
+									out[id] = true;
+								}
+							} else if(constructor.ids[id][scopekey][key](value)) { // otherwise we know it is a predicate
+								if(constructor.ids[id].joqularMatch(rootpattern)) {
+									matches.push(constructor.ids[id]);
+									return;
+								}
+								out[id] = true;
+							}
+						}
+					} else {
+						delete scope[scopekey]["function"][key][id];
+					}
+				});
+				// not finalizing results here is intentional, there may be non-function oriented but same named matches
+			}
+			if(type==="object") {
+				var submatches = joqularFind.call(constructor,pattern[key],index[key],rootpattern,results,index,key,out);
+				matches = matches.concat(submatches);
+			}
+			results = (results ? intersection(results,matches) : matches);
+			return results.length > 0;
 		});
 		return (results || []);
 	}
@@ -478,106 +674,165 @@
 					newcons.ids.nextId = 0;
 					newcons.index = {};
 					newcons.indexing = {};
+					newcons.joqularClear = function(indexOnly,asynch) {
+						var count = Object.keys(newcons.ids).length-1;
+						newcons.ids = {};
+						newcons.ids.nextId = 0;
+						newcons.index = {};
+						var promise;
+						if(!indexOnly && newcons.joqularSave) {
+							promise = newcons.joqularSave();
+						} else {
+							promise = new Promise(function(resolve,reject) { resolve(); });
+						}
+						if(typeof(asynch)==="function") {
+							promise.then(function(count) {
+								asynch(null,count);
+							})["catch"](function(e) {
+								asynch(e);
+							});
+							return null;
+						}
+						return promise;
+					};
 					newcons.prototype = Object.create(cons.prototype);
 					if(config.datastore && config.datastore.name && config.datastore.type==="IndexedDB") {
-						newcons.persist = function(aysnch) {
-							var me = this;
-							me.dbVersion || (me.dbVersion = 1);
-							var dbrequest = indexedDB.open(config.datastore.name,me.dbVersion);
-							dbrequest.onupgradeneeded = function(event) {
-								var db = event.target.result;
-								if(!db.objectStoreNames.contains(name)) {
-									db.createObjectStore(name, {  autoIncrement : true });
-								}
-							};
-							dbrequest.onblocked = function(event) {
-								console.log(event);
-							};
-							dbrequest.onerror = function(event) {
-								if(event.target.error.name==="VersionError" && event.target.error.message.indexOf(" less ")>=0) {
-									event.cancelBubble = true;
-									me.dbVersion++;
-									me.persist();
-								}
-							};
-							dbrequest.onsuccess = function(event) {
-								var db = event.target.result, objectstore;
-								if(!db.objectStoreNames.contains(name)) {
-									db.close();
-									me.dbVersion++;
-									me.persist();
-								} else {
-									objectstore = db.transaction(name, "readwrite").objectStore(name);
-									var request = objectstore.get("root");
-									request.onsuccess = function(event) {
-										var object = request.result;
-										if(!object) {
-											objectstore.add({ids:me.ids,index:me.index},"root");
-										} else {
-											object.ids = me.ids;
-											object.index = me.index;
-											objectstore.put(object,"root");
-										}
+						newcons.joqularSave = function(aysnch) {
+							var me = this, tid;
+							var promise = new Promise(function(resolve,reject) {
+								me.dbVersion || (me.dbVersion = 1);
+								var dbrequest = indexedDB.open(config.datastore.name,me.dbVersion);
+								dbrequest.onupgradeneeded = function(event) {
+									var db = event.target.result;
+									if(!db.objectStoreNames.contains(name)) {
+										db.createObjectStore(name, {  autoIncrement : true });
+									}
+								};
+								dbrequest.onblocked = function(event) {
+									reject(event);
+								};
+								dbrequest.onerror = function(event) {
+									if(event.target.error.name==="VersionError" && event.target.error.message.indexOf(" less ")>=0) {
+										event.cancelBubble = true;
+										me.dbVersion++;
+										me.joqularSave();
+									} else {
+										reject(event);
+									}
+								};
+								dbrequest.onsuccess = function(event) {
+									var db = event.target.result, objectstore;
+									if(!db.objectStoreNames.contains(name)) {
 										db.close();
-									};
-								}
-							};
+										me.dbVersion++;
+										me.joqularSave();
+									} else {
+										objectstore = db.transaction(name, "readwrite").objectStore(name);
+										var request = objectstore.get("root");
+										request.onsuccess = function(event) {
+											var object = request.result;
+											if(!object) {
+												objectstore.add({ids:me.ids,index:me.index},"root");
+											} else {
+												object.ids = me.ids;
+												object.index = me.index;
+												objectstore.put(object,"root");
+											}
+											db.close();
+											var count = Object.keys(me.ids).length - 1; // -1 for nextId key
+											resolve(count);
+										};
+										request.onerror = function(event) {
+											reject(event);
+										}
+									}
+								};
+							});
+							if(typeof(asynch)==="function") {
+								promise.then(function(count) {
+									asynch(null,count);
+								})["catch"](function(e) {
+									asynch(e);
+								});
+								return null;
+							} 
+							/*else if(typeof(asynch)==="number") {
+								tid = setTimeout(function() { tid = null; });
+								
+							}*/
+							return promise;
 						}
-						newcons.load = function(aysnch) {
+						newcons.joqularLoad = function(aysnch) {
 							var me = this;
-							me.dbVersion || (me.dbVersion = 1);
-							var dbrequest = indexedDB.open(config.datastore.name,me.dbVersion);
-							dbrequest.onupgradeneeded = function(event) {
-								var db = event.target.result;
-								if(!db.objectStoreNames.contains(name)) {
-									db.createObjectStore(name, {  autoIncrement : true });
-								}
-							};
-							dbrequest.onblocked = function(event) {
-								console.log(event);
-							};
-							dbrequest.onerror = function(event) {
-								if(event.target.error.name==="VersionError" && event.target.error.message.indexOf(" less ")>=0) {
-									event.cancelBubble = true;
-									me.dbVersion++;
-									me.load();
-								}
-							};
-							dbrequest.onsuccess = function(event) {
-								var db = event.target.result, objectstore;
-								if(!db.objectStoreNames.contains(name)) {
-									db.close();
-									me.dbVersion++;
-									me.load();
-								} else {
-									objectstore = db.transaction(name).objectStore(name);
-									var request = objectstore.get("root");
-									request.onsuccess = function(event) {
-										var object = request.result;
-										if(object) {
-											me.ids = {};
-											var keys = Object.keys(object.ids);
-											keys.forEach(function(id) {
-												if(id!=="nextId") {
-													me.ids[id] = Object.create(me.prototype);
-													for(var property in object.ids[id]) {
-														me.ids[id][property] = object.ids[id][property];
+							var promise = new Promise(function(resolve,reject) {
+								me.dbVersion || (me.dbVersion = 1);
+								var dbrequest = indexedDB.open(config.datastore.name,me.dbVersion);
+								dbrequest.onupgradeneeded = function(event) {
+									var db = event.target.result;
+									if(!db.objectStoreNames.contains(name)) {
+										db.createObjectStore(name, {  autoIncrement : true });
+									}
+								};
+								dbrequest.onblocked = function(event) {
+									console.log(event);
+									reject(event)
+								};
+								dbrequest.onerror = function(event) {
+									if(event.target.error.name==="VersionError" && event.target.error.message.indexOf(" less ")>=0) {
+										event.cancelBubble = true;
+										me.dbVersion++;
+										me.joqularLoad();
+									} else {
+										reject(event)
+									}
+								};
+								dbrequest.onsuccess = function(event) {
+									var db = event.target.result, objectstore;
+									if(!db.objectStoreNames.contains(name)) {
+										db.close();
+										me.dbVersion++;
+										me.joqularLoad();
+									} else {
+										objectstore = db.transaction(name).objectStore(name);
+										var request = objectstore.get("root");
+										request.onsuccess = function(event) {
+											var object = request.result;
+											if(object) {
+												me.ids = {};
+												var keys = Object.keys(object.ids);
+												keys.forEach(function(id) {
+													if(id!=="nextId") {
+														me.ids[id] = Object.create(me.prototype);
+														for(var property in object.ids[id]) {
+															me.ids[id][property] = object.ids[id][property];
+														}
+														Object.defineProperty(me.ids[id],"constructor",{enumerable:false,value:me});
+														me.ids.nextId = parseInt(id)+1;
 													}
-													Object.defineProperty(me.ids[id],"constructor",{enumerable:false,value:me});
-													me.ids.nextId = parseInt(id)+1;
-												}
-											});
-											me.index = object.index;
-										} else {
-											me.ids = {};
-											me.ids.nextId = 0;
-											me.index = {};
-										}
-										db.close();
-									};
-								}
-							};
-						}
+												});
+												me.index = object.index;
+											} else {
+												me.ids = {};
+												me.ids.nextId = 0;
+												me.index = {};
+											}
+											db.close();
+											var count = Object.keys(me.ids).length - 1; // -1 for nextId key
+											resolve(count);
+										};
+									}
+								};
+							});
+							if(typeof(asynch)==="function") {
+								promise.then(function(count) {
+									asynch(null,count);
+								})["catch"](function(e) {
+									asynch(e);
+								});
+								return null;
+							}
+							return promise;
+						};
 					}
 					return newcons;
 				}
@@ -586,17 +841,17 @@
 					config.enhanceArray = true;
 					config.ehhanceDate = true;
 					constructor.joqularFind = function(pattern,wait) {
+						function dowait(f) {
+							if(Object.keys(me.indexing).length===0) {
+								f();
+							} else {
+								setTimeout(function() { dowait(f) },100);
+							}
+						}
 						var me = this;
 						if(wait) {
-							function dowait(f) {
-								if(Object.keys(me.indexing).length===0) {
-									f();
-								} else {
-									setTimeout(function() { dowait(f) },100);
-								}
-							}
 							if(typeof(wait)==="function") {
-								dowait(function() { wait(joqularFind.call(me,pattern,me.index)); });
+								dowait(function() { wait(null,joqularFind.call(me,pattern,me.index)); });
 							} else {
 								return new Promise(function(resolve,reject) {
 									dowait(function() { resolve(joqularFind.call(me,pattern,me.index)); });
@@ -611,7 +866,7 @@
 						me.ids.nextId++;
 						me.ids[id] = instance;
 						if(async) {
-							let tid;
+							var tid;
 							if(typeof(async)==="function") {
 								tid = setTimeout(function() { joqularIndex.call(me,id,instance,me.index); delete me.indexing[tid]; async(instance); },0);
 								me.indexing[tid] = true;
@@ -627,15 +882,29 @@
 						joqularIndex.call(me,id,instance,me.index);
 						return instance;
 					};
-				}
+				};
 				function Time(value,precision) {
-					if(value instanceof Date) {
+					if(value==null) {
+						value = new Date.getTime()
+					} else if(value instanceof Time) {
+						value = value.value;
+					} else if(value instanceof Date) {
 						value = value.getTime();
+					} else if(value instanceof TimeSpan) {
+						value = value.startingTime.valueOf();
+					} else if(typeof(value)==="string") {
+						value = Date.parse(value);
 					}
 					this.value = value;
 					this.toPrecision(precision,true);
-				}
+				};
 				Time.prototype = Object.create(constructor.prototype);
+				Time.prototype.valueOf = function() {
+					return this.value;
+				};
+				Time.prototype.withPrecision = function(precision) {
+					return this.toPrecision(precision,false);
+				};
 				Time.prototype.toPrecision = function(precision,modify) {
 					modify = (modify || modify==null ? true : false);
 					if(!precision || this.value===Infinity || this.value===-Infinity || isNaN(this.value)) {
@@ -656,8 +925,41 @@
 						this.setTime(date.getTime());
 						return this;
 					}
-					return new Time(dt);
-				}
+					return new Time(date);
+				};
+				Time.prototype.lt = toPredicate(function(value,precision) {
+					return new Time(this).withPrecision(precision).valueOf() < new Time(value,precision).valueOf();
+				});
+				Time.prototype.lte = toPredicate(function(value,precision) {
+					if(value===this) {
+						return true;
+					}
+					return new Time(this).withPrecision(precision).valueOf() <= new Time(value,precision).valueOf();
+				});
+				Time.prototype.eq = toPredicate(function(value,precision) {
+					if(value===this) {
+						return true;
+					}
+					return new Time(this).withPrecision(precision).valueOf() === new Time(value,precision).valueOf();
+				});
+				Time.prototype.neq = toPredicate(function(value,precision) {
+					return new Time(this).withPrecision(precision).valueOf() !== new Time(value,precision).valueOf();
+				});
+				Time.prototype.gte = toPredicate(function(value,precision) {
+					if(value===this) {
+						return true;
+					}
+					return new Time(this).withPrecision(precision).valueOf() >= new Time(value,precision).valueOf();
+				});
+				Time.prototype.gt = toPredicate(function(value,precision) {
+					return new Time(this).withPrecision(precision).valueOf() > new Time(value,precision).valueOf();
+				});
+				Time.prototype["in"] = toPredicate(function(value,precision) {
+					if(value instanceof TimeSpan) {
+						return value.contains(this);
+					}
+					return new Time(this,precision).valueOf() === new Time(value,precision).valueOf();
+				});
 				var dateProperties = {
 					getDate: null,
 					getDay: null,
@@ -707,47 +1009,96 @@
 					UTC: null
 				}
 				Object.keys(dateProperties).forEach(function(key) {
-					Time.prototype[key] = function() {
-							var dt = new Date(this.value);
-							var result = dt[key].apply(dt,arguments);
-							this.value = dt.getTime();
-							return result;
+					if(!Time.prototype[key]) {
+						Time.prototype[key] = function() {
+								var dt = new Date(this.value);
+								var result = dt[key].apply(dt,arguments);
+								this.value = dt.getTime();
+								return result;
+						}
 					}
 				});
-				Time.prototype.valueOf = function() {
-					return this.value;
-				}
-				function Duration(milliseconds) {
-					this.value = milliseconds;
+				function Duration(value,period) {
+					period || (period = "ms");
+					if(value instanceof Duration) {
+						period = "ms";
+						value = value.valueOf();
+					}
+					this.value = value * Duration.factors[period];
 					this.range = 0;
-				}
+				};
+				Duration.factors = {
+						Y: 31557600*1000,
+						M: (31557600*1000)/12, // psuedo-month
+						D: 24 * 60 * 60 * 1000,
+						h: 60 * 60 * 1000,
+						m: 60 * 1000,
+						s: 1000,
+						ms: 1
+					}
 				Duration.prototype = Object.create(constructor.prototype);
 				Duration.prototype.valueOf = function() {
 					return this.value;
-				}
+				};
+				Duration.prototype.lt = toPredicate(function(value,period) {
+					period || (period = "s");
+					return this.valueOf() / Duration.factors[period] < new Duration(value).valueOf()  / Duration.factors[period];
+				});
+				Duration.prototype.lte = toPredicate(function(value,period) {
+					if(value===this) {
+						return true;
+					}
+					period || (period = "s");
+					return this.valueOf() / Duration.factors[period] <= new Duration(value).valueOf()  / Duration.factors[period];
+				});
+				Duration.prototype.eq = toPredicate(function(value,period) {
+					if(value===this) {
+						return true;
+					}
+					period || (period = "s");
+					return this.valueOf() / Duration.factors[period] === new Duration(value).valueOf()  / Duration.factors[period];
+				});
+				Duration.prototype.neq = toPredicate(function(value,period) {
+					period || (period = "s");
+					return this.valueOf() / Duration.factors[period] !== new Duration(value).valueOf()  / Duration.factors[period];
+				});
+				Duration.prototype.gte = toPredicate(function(value,period) {
+					if(value===this) {
+						return true;
+					}
+					period || (period = "s");
+					return this.valueOf() / Duration.factors[period] >= new Duration(value).valueOf()  / Duration.factors[period];
+				});
+				Duration.prototype.gt = toPredicate(function(value,period) {
+					period || (period = "s");
+					return this.valueOf() / Duration.factors[period] > new Duration(value).valueOf()  / Duration.factors[period];
+				});
 				Duration.prototype.atLeast = function() {
 					this.range = -1;
-				}
+				};
 				Duration.prototype.atMost = function() {
 					this.range = 1;
-				}
+				};
 				Duration.prototype.exact = function() {
 					this.range = 0;
-				}
+				};
 				// need to define gt, lt etc. in context of range
 				function TimeSpan(startingTime,endingTime) {
-					this.startingTime = (startingTime!=null ? startingTime : -Infinity);
-					this.endingTime = (endingTime!=null ? endingTime : Infinity);
-					if(this.startingTime instanceof Date) {
-						this.startingTime = this.startingTime.getTime();
+					if(startingTime instanceof TimeSpan) {
+						return new TimeSpan(startingTime.startingTime,startingTime.endingTime);
 					}
-					if(this.endingTime instanceof Date) {
-						this.endingTime = this.endingTime.getTime();
-					}
-					Object.defineProperty(this,"duration",{enumerate:true,configurable:false,get:function() { return this.endingTime - this.startingTime}, set: function() {}});
-				}
+					this.startingTime = (startingTime!=null ? new Time(startingTime) : new Time(-Infinity));
+					this.endingTime = (endingTime!=null ? new Time(endingTime) : new Time(Infinity));
+					Object.defineProperty(this,"duration",{enumerable:true,configurable:false,get:function() { return this.endingTime - this.startingTime}, set: function() {}});
+				};
 				TimeSpan.prototype = Object.create(constructor.prototype);
-				(TimeSpan.prototype.intersects = function(value,precision) {
+				TimeSpan.prototype.contains = toPredicate(function(value,precision) {
+					var startingTime = new Time(value.startingTime,precision);
+					var endingTime = new Time(value.endingTime,precision);
+					var time = new Time(value,precision);
+					return startingTime.valueOf() <= time.valueOf() <= endingTime.valueOf();
+				});
+				TimeSpan.prototype.intersects = toPredicate(function(value,precision) {
 					var startingTime = new Time(value.startingTime,precision);
 					var endingTime = new Time(value.endingTime,precision);
 					if(this.startingTime>=startingTime && this.startingTime<=endingTime) {
@@ -757,70 +1108,67 @@
 						return true;
 					}
 					return false;
-				}).predicate = true;
-				(TimeSpan.prototype.disjoint = function(value,precision) {
+				});
+				TimeSpan.prototype.disjoint = toPredicate(function(value,precision) {
 					return !this.intersects(value,precision);
-				}).predicate = true;
-				(TimeSpan.prototype.coincident = function(value,precision) {
-					var startingTime = new Time(value.startingTime,precision);
-					var endingTime = new Time(value.endingTime,precision);
+				});
+				TimeSpan.prototype.coincident = toPredicate(function(value,precision) {
+					var startingTime, endingTime;
+					if(value instanceof Date || typeof(value)==="number") {
+						startingTime = endingTime = new Time(value,precision);
+					} else {
+						startingTime = new Time(value.startingTime,precision);
+						endingTime = new Time(value.endingTime,precision);
+					}
 					return new Time(this.startingTime,precision).valueOf()==startingTime.valueOf() && new Time(this.endingTime,precision).valueOf()==endingTime.valueOf();
-				}).predicate = true;
-				(TimeSpan.prototype.adjacentOrBefore = function(value,precision) {
-					var startingTime;
-					if(value instanceof Date || typeof(value)==="number") {
-						startingTime = new Time(value,precision);
-					} else {
-						startingTime = new Time(value.startingTime,precision);
+				})
+				TimeSpan.prototype.eq = toPredicate(function(value,precision) {
+					if(this===value) {
+						return true;
 					}
-					return new Time(this.endingTime,precision).valueOf()<=startingTime.valueOf();
-				}).predicate = true;
-				(TimeSpan.prototype.before = function(value,precision) {
-					var startingTime;
-					if(value instanceof Date || typeof(value)==="number") {
-						startingTime = new Time(value,precision);
-					} else {
-						startingTime = new Time(value.startingTime,precision);
+					if(!value instanceof TimeSpan) {
+						return false;
 					}
-					return new Time(this.endingTime,precision).valueOf()<startingTime.valueOf();
-				}).predicate = true;
-				(TimeSpan.prototype.adjacentBefore = function(value,precision) {
-					var startingTime;
-					if(value instanceof Date || typeof(value)==="number") {
-						startingTime = new Time(value,precision);
-					} else {
-						startingTime = new Time(value.startingTime,precision);
-					}
-					return new Time(this.endingTime,precision).valueOf()===startingTime.valueOf();
-				}).predicate = true;
-				(TimeSpan.prototype.adjacentOrAfter = function(value,precision) {
+					return new Time(this.startingTime,precision).valueOf() === new Time(value.startingTime,precision).valueOf() &&
+						new Time(this.endingTime,precision).valueOf() === new Time(value.endingTime,precision).valueOf();
+				});
+				TimeSpan.prototype.adjacentOrBefore = toPredicate(function(value,precision) {
+					return new Time(this.endingTime+new Duration(1,precision),precision).valueOf() <= new Time(value,precision).valueOf();
+				});
+				TimeSpan.prototype.before = toPredicate(function(value,precision) {
+					return new Time(this.endingTime+new Duration(1,precision),precision).valueOf() < new Time(value,precision).valueOf();
+				});
+				TimeSpan.prototype.adjacentBefore = toPredicate(function(value,precision) {
+					return new Time(this.endingTime+new Duration(1,precision),precision).valueOf() === new Time(value,precision).valueOf();
+				});
+				TimeSpan.prototype.adjacentOrAfter = toPredicate(function(value,precision) {
 					var endingTime;
-					if(value instanceof Date || typeof(value)==="number") {
-						endingTime = new Time(value,precision);
-					} else {
+					if(value instanceof TimeSpan) {
 						endingTime = new Time(value.endingTime,precision);
+					} else {
+						endingTime = new Time(value,precision);
 					}
-					return new Time(this.startingTime,precision).valueOf()>=endingTime.valueOf();
-				}).predicate = true;
-				(TimeSpan.prototype.after = function(value,precision) {
+					return new Time(this.startingTime-new Duration(1,precision),precision).valueOf() >= endingTime.valueOf();
+				});
+				TimeSpan.prototype.after = toPredicate(function(value,precision) {
 					var endingTime;
-					if(value instanceof Date || typeof(value)==="number") {
-						endingTime = new Time(value,precision);
-					} else {
+					if(value instanceof TimeSpan) {
 						endingTime = new Time(value.endingTime,precision);
+					} else {
+						endingTime = new Time(value,precision);
 					}
-					return new Time(this.startingTime,precision).valueOf()>endingTime.valueOf();
-				}).predicate = true;
-				(TimeSpan.prototype.adjacentAfter = function(value,precision) {
+					return new Time(this.startingTime-new Duration(1,precision),precision).valueOf() > endingTime.valueOf();
+				});
+				TimeSpan.prototype.adjacentAfter = toPredicate(function(value,precision) {
 					var endingTime;
-					if(value instanceof Date || typeof(value)==="number") {
-						endingTime = new Time(value,precision);
-					} else {
+					if(value instanceof TimeSpan) {
 						endingTime = new Time(value.endingTime,precision);
+					} else {
+						endingTime = new Time(value,precision);
 					}
-					return new Time(this.startingTime,precision).valueOf()==endingTime.valueOf();
-				}).predicate = true;
-				(TimeSpan.prototype.adjacent = function(value,precision) {
+					return new Time(this.startingTime-new Duration(1,precision),precision).valueOf() == endingTime.valueOf();
+				});
+				TimeSpan.prototype.adjacent = toPredicate(function(value,precision) {
 					if(this.adjacentBefore(value,precision)) {
 						return -1;
 					}
@@ -828,23 +1176,23 @@
 						return 1;
 					}
 					return 0;
-				}).predicate = true;
+				});
 				constructor.prototype.joqularMatch = function(pattern,scope) {
 					return joqularMatch.call(this,pattern,scope);
 				};
-				(constructor.prototype.instanceof = function(constructor) {
+				(constructor.prototype["instanceof"] = function(constructor) {
 					return this instanceof constructor;
 				}).predicate = true;
-				(constructor.prototype.eq = function(value) {
+				constructor.prototype.eq = toPredicate(function(value) {
 					// first clause handles an object or primitve and value===null or value===undefined
 					// second clause handles everything else because primitives and Objects will return themselves with .valueOf()
 					// array and other types of objects may need to override eq
 					return this.valueOf() === value || 
-						this.valueOf() === value.valueOf();
-				}).predicate = true;
-				(constructor.prototype.neq = function(value) {
+						(value!=null && this.valueOf() === value.valueOf());
+				});
+				constructor.prototype.neq = toPredicate(function(value) {
 					return !this.eq(value);
-				}).predicate = true;
+				});
 				if(config.enhancePrimitives) {
 					[Number,String,Boolean].forEach(function(primitive) {
 						primitive.prototype.joqularMatch = constructor.prototype.joqularMatch;
@@ -854,109 +1202,194 @@
 						(primitive.prototype.lte = function(value) {
 							return this.valueOf() <= value || this.valueOf() <= value.valueOf();
 						}).predicate=true;
-						primitive.prototype.eq = constructor.prototype.eq;
-						primitive.prototype.neq = constructor.prototype.neq;
+						(primitive.prototype.eq = function(value) {
+							value = toObject(value);
+							return this === value || (value!==undefined && this.valueOf() === value.valueOf());
+						}).predicate=true;
+						(primitive.prototype.neq = function(value) {
+							return !this.eq(value);
+						}).predicate=true;
 						(primitive.prototype.gte = function(value) {
 							return this.valueOf() >= value || this.valueOf() >= value.valueOf();
 						}).predicate=true;
 						(primitive.prototype.gt = function(value) {
 							return this.valueOf() > value || this.valueOf() > value.valueOf();
 						}).predicate=true;
+						(primitive.prototype["in"] = function(value) {
+							return value && value.contains && value.contains(this);
+						}).predicate=true;
+						(primitive.prototype.nin = function(value) {
+							return !value || !value.contains || !value.contains(this);
+						}).predicate=true;
 					});
 				}
+				String.prototype.echoes = toPredicate(function(value) {
+					return soundex(this)===soundex(value);
+				});
+				String.prototype.soundex = String.prototype.echoes;
 				if(config.enhanceDate) {
 					Date.prototype.joqularMatch = constructor.prototype.joqularMatch;
-					Date.prototype.lt = function(value,precision) {
+					Object.defineProperty(Date.prototype,"time",{enumerable:true,configurable:false,set:function() { return; },get:function() { return this.getTime(); }});
+					Date.prototype.lt = toPredicate(function(value,precision) {
 						if(value instanceof TimeSpan) {
 							return value.after(this,precision);
 						}
 						return new Time(this,precision) < new Time(value,precision);
-					}
-					Date.prototype.lte = function(value,precision) {
+					});
+					Date.prototype.lte = toPredicate(function(value,precision) {
 						if(value instanceof TimeSpan) {
 							return value.adjacentOrAfter(this,precision);
 						}
 						return new Time(this,precision) <= new Time(value,precision);
-					}
-					Date.prototype.eq = function(value,precision) {
+					});
+					Date.prototype.eq = toPredicate(function(value,precision) {
 						if(value===this) {
 							return true;
 						}
-						return new Time(this,precision) == new Time(value,precision);
-					}
-					Date.prototype.neq = function(value,precision) {
-						return new Time(this,precision) != new Time(value,precision);
-					}
-					Date.prototype.gte = function(value,precision) {
+						if(value instanceof Date && this.time===value.time) {
+							return true;
+						}
+						if(value instanceof TimeSpan) {
+							return value.coincident(this,precision);
+						}
+						return new Time(this,precision).valueOf() == new Time(value,precision).valueOf();
+					});
+					Date.prototype.neq = toPredicate(function(value,precision) {
+						return new Time(this,precision).valueOf() !== new Time(value,precision).valueOf();
+					});
+					Date.prototype.gte = toPredicate(function(value,precision) {
 						if(value instanceof TimeSpan) {
 							return value.adjacentOrBefore(this,precision);
 						}
-						return new Time(this,precision) >= new Time(value,precision);
-					}
-					Date.prototype.gt = function(value,precision) {
+						return new Time(this,precision).valueOf() >= new Time(value,precision).valueOf();
+					});
+					Date.prototype.gt = toPredicate(function(value,precision) {
 						if(value instanceof TimeSpan) {
 							return value.adjacentOrBefore(this,precision);
 						}
-						return new Time(this,precision) >= new Time(value,precision);
-					}
-					Date.prototype.before = Date.prototype.lt
-					Date.prototype.adjacentOrBefore = Date.prototype.lt
-					Date.prototype.after = Date.prototype.gt
-					Date.prototype.adjacentOrAfter = Date.prototype.lt	
-					Date.prototype.coincident = function(value,precision) {
+						return new Time(this,precision).valueOf() >= new Time(value,precision).valueOf();
+					});
+					Date.prototype.before = Date.prototype.lt;
+					Date.prototype.adjacentOrBefore = Date.prototype.lte;
+					Date.prototype.after = Date.prototype.gt;
+					Date.prototype.adjacentOrAfter = Date.prototype.gte;
+					Date.prototype.coincident = toPredicate(function(value,precision) {
 						if(value instanceof TimeSpan) {
 							var d = new TimeSpan(this,this);
 							return d.coincident(value,precision);
 						}
 						return this.eq(value,precision);
-					}
-					Date.prototype.disjoint = function(value,precision) {
+					});
+					Date.prototype.disjoint = toPredicate(function(value,precision) {
 						if(value instanceof TimeSpan) {
 							var d = new TimeSpan(this,this);
 							return d.disjoint(value,precision);
 						}
 						return this.neq(value,precision);
-					}
-					Date.prototype.intersects = function(value,precision) {
+					});
+					Date.prototype.intersects = toPredicate(function(value,precision) {
 						if(value instanceof TimeSpan) {
 							var d = new TimeSpan(this,this);
 							return d.intersects(value,precision);
 						}
 						return this.eq(value,precision);
-					}
+					});
 				}
 				if(config.enhanceArray) {
 					Array.prototype.joqularMatch = constructor.prototype.joqularMatch;
-					Array.prototype.count = function() {
-						return this.length;
-					};
-					Array.prototype.avg = function() {
-						return this.sum() / this.count();
-					}
-					Array.prototype.sum = function(ignoreEnds) {
+					Array.prototype.count = toProvider(function(type) {
+						return (!type ? this.length : this.filter(function(item) { return item && typeof(item.valueOf())===type; }).length);
+					});
+					Array.prototype.avg = toProvider(function(ignoreEnds) {
 						var sum = 0;
-						for(let i=0;i<this.length;i++) {
-							if(ignoreEnds && (i===0 || i===this.length-1)) continue;
-							sum += (this[i]!=null && typeof(this[i].valueOf())==="number" ? this[i].valueOf() : 0);
+						var copy = this.filter(function(item) { return item!=null && typeof(item.valueOf())==="number" && !isNaN(item.valueOf()); }).sort(function(a,b) { return a - b;});
+						if(ignoreEnds && copy.length>2) {
+							copy.shift();
+							copy.pop();
+						}
+						for(var i=0;i<copy.length;i++) {
+							sum += this[i].valueOf();
+						}
+						return sum / copy.length;
+					});
+					Array.prototype.stdev = toProvider(function(ignoreEnds) {
+						return Math.sqrt(this.variance(ignoreEnds));
+					})
+					Array.prototype.variance = toProvider(function(ignoreEnds)
+					{
+					    var len = 0;
+					    var sum = 0;
+					    var arr = this.filter(function(item) { return item!=null && typeof(item.valueOf())==="number" && !isNaN(item.valueOf()); }).sort(function(a,b) { return a - b;});
+						if(ignoreEnds && arr.length>2) {
+							arr.shift();
+							arr.pop();
+						}
+					    for(var i=0;i<arr.length;i++)
+					    {
+					             len = len + 1;
+					             sum = sum + arr[i].valueOf(); 
+					    }
+					    var v = 0;
+					    if (len > 1)
+					    {
+					        var mean = sum / len;
+					        for(var i=0;i<arr.length;i++)
+					        {
+					              v = v + (arr[i] - mean) * (arr[i] - mean);                 
+					        }
+					        return v / len;
+					    }
+					    else
+					    {
+					       return 0;
+					    }    
+					});
+					Array.prototype.every.predicate = true;
+					Array.prototype.some.predicate = true;
+					Array.prototype.sum = toProvider(function(ignoreEnds) {
+						var sum = 0;
+						var copy = this.filter(function(item) { return item!=null && typeof(item.valueOf())==="number" && !isNaN(item.valueOf()); }).sort(function(a,b) { return a - b;});
+						if(ignoreEnds && copy.length>2) {
+							copy.shift();
+							copy.pop();
+						}
+						for(var i=0;i<copy.length;i++) {
+							sum += this[i].valueOf();
 						}
 						return sum;
-					}
-					Array.prototype.min = function(ignoreEnds) {
+					});
+					Array.prototype.min = toProvider(function(type,ignoreEnds) {
+						type || (type="number");
 						var i = 0;
-						if(ignoreEnds) i++;
-						var copy = this.filter(function(item) { return item && typeof(item.valueOf())==="number" && !isNaN(item.valueOf()); }).sort(function(a,b) { return a - b;});
+						var copy = this.filter(function(item) { return item!=null && typeof(item.valueOf())===type && (!type==="number" || !isNaN(item.valueOf())); });
+						if(type==="number") {
+							copy.sort(function(a,b) { return a.valueOf() - b.valueOf();});
+						} else {
+							copy.sort();
+						}
+						if(ignoreEnds && copy.length>2) i++;
 						return copy[i];
-					}
-					Array.prototype.max = function(ignoreEnds) {
-						var i = this.length-1;
-						if(ignoreEnds) i--;
-						var copy = this.filter(function(item) { return item && typeof(item.valueOf())==="number" && !isNaN(item.valueOf()); }).sort(function(a,b) { return a - b;});
+					});
+					Array.prototype.max = toProvider(function(type,ignoreEnds) {
+						type || (type="number");
+						var copy = this.filter(function(item) { return item!=null && typeof(item.valueOf())===type && (!type==="number" || !isNaN(item.valueOf())); });
+						if(type==="number") {
+							copy.sort(function(a,b) { return a.valueOf() - b.valueOf();});
+						} else {
+							copy.sort();
+						}
+						var i = copy.length-1;
+						if(ignoreEnds  && copy.length>2) i--;
 						return copy[i];
-					}
-					Array.prototype.bsearch = function(value) {
-						return binarySearch(this,value);
+					});
+					Array.prototype.bsearch = function(value,sorter) {
+						var me = this;
+						if(sorter) {
+							me = this.slice(0).sort(sorter);
+						}
+						return binarySearch(me,value);
 					};
-					(Array.prototype.eq = function(value) {
+					Array.prototype.eq = toPredicate(function(value) {
 						if(this===value) { return true; }
 						if(!(value instanceof Array) || this.length!==value.length) {
 							return false;
@@ -970,26 +1403,32 @@
 								return item.eq(v);
 							}
 						});
-					}).predicate = true;
-					(Array.prototype.intersects = function(value) {
+					});
+					Array.prototype.neq =  toPredicate(function(value) {
+						return !this.eq(value);
+					});
+					Array.prototype.intersects =  toPredicate(function(value) {
 						if(value instanceof Set) {
 							value = Set.toArray()
 						}
 						var result = intersection(this,value);
 						return result && result.length>0;
-					}).predicate = true;
-					(Array.prototype.disjoint = function(value) {
+					});
+					Array.prototype.disjoint =  toPredicate(function(value) {
 						return !this.intersects(value);
-					}).predicate=true;
-					(Array.prototype.coincident = function(value) {
+					});
+					Array.prototype.coincident =  toPredicate(function(value) {
 						return this.count() === value.count() &&
 							this.every(function(item) {
 								return value.contains(item);
 							});
-					}).predicate = true;					
-					(Array.prototype.contains = function(value) {
+					});					
+					Array.prototype.contains =  toPredicate(function(value) {
 						return this.some(function(item) {
-							if(item===value) {
+							if(item===value ||
+								(item!=null && item.valueOf()===value) ||
+								(value!=null && item===value.valueOf()) || 
+								(item!=null && value!=null && item.valueOf()===value.valueOf())) {
 								return true;
 							}
 							if(typeof(item.eq)==="function") {
@@ -997,97 +1436,74 @@
 							}
 							return false;
 						});
-					}).predicate = true;
+					});
 					Array.prototype.includes = Array.prototype.contains;
-					(Array.prototype.excludes = function(value) {
+					Array.prototype.excludes =  toPredicate(function(value) {
 						return !this.includes(value);
-					}).predicate = true;
+					});
 				}
 				if(config.enhanceSet) {
 					Set.prototype.joqularMatch = constructor.prototype.joqularMatch;
 					Set.prototype.count = function() {
-						return set.size;
+						return this.size;
 					};
 					Set.prototype.toArray = function() {
 						var array = [];
-						for(let item of this.values()) {
+						this.forEach(function(item) {
 							array.push(item);
-						}
+						})
 						return array;
 					};
-					(Set.prototype.every = function(f,scope) {
-						var i = 0;
-						for(let item of this) {
-							if(!f.call(scope,item,i)) {
-								return false;
-							}
-							i++;
-						}
-						return true;
-					}).predicate=true;
-					(Set.prototype.some = function(f,scope) {
-						var i = 0;
-						for(let item of this) {
-							if(f.call(scope,item,i)) {
-								return true;
-							}
-							i++;
-						}
-						return false;
-					}).predicate=true;
+					Set.prototype.every =  toPredicate(function(f) {
+						var array = this.toArray();
+						return array.every(f)
+					});
+					Set.prototype.some =  toPredicate(function(f) {
+						var array = this.toArray();
+						return array.some(f)
+					});
 					Set.prototype.indexOf = function(value) {
-						var i = 0;
-						for(let item of this.values()) {
-							if(item===value || (item && item.valueOf()===value) || (item && value && item.valueOf()===value.valueOf())) {
-								return i;
-							}
-							i++;
-						}
-						return false;
+						var array = this.toArray();
+						return array.indexOf(value);
 					};
-					(Set.prototype.contains = function(value) {
-						(!value && this.has(value)) || this.has(value.valueOf());
-					}).predicate=true;
-					(Set.prototype.eq = function(value) {
+					Set.prototype.contains =  toPredicate(function(value) {
+						return (!value && this.has(value)) || this.has(value.valueOf());
+					});
+					Set.prototype.eq =  toPredicate(function(value) {
+						var me = this;
 						if(this===value) { return true; }
 						if(!(value instanceof Set) || this.size!==this.size) {
 							return false;
 						}
-						var array = this.toArray();
-						var array2 = (value instanceof Array ? value : value.toArray());
-						return array.every(function(item,i) {
-							var v = array2[i];
-							if(item===v) {
-								return true;
-							}
-							if(typeof(item.eq)==="function") {
-								return item.eq(v);
-							}
-							return false;
+						return me.every(function(item) {
+							return value.has(item);
 						});
-					}).predicate = true;
-					(Set.prototype.intersects = function(value) {
+					});
+					Set.prototype.neq =  toPredicate(function(value) {
+						return !this.eq(value);
+					});
+					Set.prototype.intersects =  toPredicate(function(value) {
 						if(!value || typeof(value.contains)!=="function") {
 							return false;
 						}
 						return this.some(function(item) {
-							return value.contains(item[1]);
+							return value.contains(item);
 						});
-					}).predicate = true;
-					(Set.prototype.disjoint = function(value) {
+					});
+					Set.prototype.disjoint =  toPredicate(function(value) {
 						return !this.intersects(value);
-					}).predicate=true;
-					(Set.prototype.coincident = function(value) {
+					});
+					Set.prototype.coincident =  toPredicate(function(value) {
 						return typeof(value.count)==="function" && 
 							this.count() === value.count() &&
 							this.every(function(item) {
-							value.contains(item);
+								return value.contains(item);
 							});
-					}).predicate = true;
+					});
 					Set.prototype.includes = Set.prototype.contains;
-					(Set.prototype.excludes = function(value) {
+					Set.prototype.excludes =  toPredicate(function(value) {
 						return !this.includes(value);
-					}).predicate = true;
+					});
 				}
 				JOQULAR.createIndex = createIndex;
 				JOQULAR.TimeSpan = TimeSpan;

@@ -1,5 +1,9 @@
 <html>
 <head>
+<script src="https://cdn.jsdelivr.net/polyfills/polyfill.js" type="text/javascript"></script>
+<script src="object-observe.js" type="text/javascript"></script>
+<script src="es6-promise.min.js" type="text/javascript"></script>
+<script src="es6-collections.min.js" type="text/javascript"></script>
 <script src="../joqular.js" type="text/javascript"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pouchdb/3.4.0/pouchdb.min.js" type="text/javascript"></script>
 <script src="pouchdb.find.min.js" type="text/javascript"></script>
@@ -57,10 +61,17 @@ function analyze(results) {
 	return analysis;
 }
 
-var numobj = 10000;
+function cleanup() {
+	indexedDB.deleteDatabase("_pouch_JOQULARPouchDBTestDatabase");
+	//indexedDB.deleteDatabase("ForerunnerDB"); don't delete, someone might be using it!
+	indexedDB.deleteDatabase("JOQULARIndexedDBTestDatabase");
+	indexedDB.deleteDatabase("JOQULARTest");
+}
+
+var numobj = 1000;
 var find = Math.floor((Math.random() * 100) + 1);
 var objects = [];
-var loops = 3;
+var loops = 1;
 var i = loops;
 while(i-->0) {
 	var start =  window.performance.now();
@@ -88,7 +99,13 @@ for(let i=0;i<objects.length;i++) {
 }
 var end =  window.performance.now();
 perfresults.Linear.find.push(end-start);
-test(objects,lresults.length,loops).then(function() { console.log(analyze(perfresults)); }).catch(function() { console.log(analyze(perfresults)); });
+test(objects,lresults.length,loops).then(function() { 
+	console.log(analyze(perfresults));
+	setTimeout(cleanup(),1000);
+}).catch(function() { 
+	console.log(analyze(perfresults));
+	setTimeout(cleanup(),1000);
+});
 	
 function test(objects,expectedResultCount,iterations) {
 	var promises = [];
@@ -101,14 +118,21 @@ function test(objects,expectedResultCount,iterations) {
 			perfresults.JOQULAR.find.push(end-start);
 			console.log("JOQULAR Expected:" + expectedResultCount + " Found:" + jresults.length);
 			start = window.performance.now();
-			PerfTestObject.persist();
-			end =  window.performance.now();
-			perfresults.JOQULAR.save.push(end-start);
-			start =  window.performance.now();
-			PerfTestObject.load();
-			end =  window.performance.now();
-			perfresults.JOQULAR.load.push(end-start);
-			resolve(++count);
+			PerfTestObject.joqularSave().then(function(saved) {
+				end =  window.performance.now();
+				perfresults.JOQULAR.save.push(end-start);
+				var ids = Object.keys(PerfTestObject.ids);
+				PerfTestObject.joqularClear(true).then(function() {
+					start =  window.performance.now();
+					PerfTestObject.joqularLoad().then(function(loaded) {
+						end =  window.performance.now();
+						perfresults.JOQULAR.load.push(end-start);
+						console.log("JOQULAR Expected:" + saved + " Found:" + (Object.keys(PerfTestObject.ids).length-1));
+						resolve(++count);
+					});
+				});
+				
+			});
 		});
 		promise.then(function(count) { if(count<iterations) return jocular(count); });
 		return promise;
@@ -172,44 +196,56 @@ function test(objects,expectedResultCount,iterations) {
 	// PouchDB
 	function pouchdb(count) {
 		var promise = new Promise(function(resolve,reject) {
-		var pdb = new PouchDB("JOQULARPouchDBTestDatabase");
-		pdb.destroy().then(function(result) {
-			pdb = new PouchDB("JOQULARPouchDBTestDatabase");
+			var pdb = new PouchDB("JOQULARPouchDBTestDatabase");
 			var remoteCouch = false;
-			pdb.createIndex({
-			  index: {
-			    fields: ['id']
-			  }
-			}).then(function (result) {
-				  	var pdocs = [];
-					for(var i=0;i<objects.length;i++) {
-					  var object = objects[i],data = {};
-					  for(var key in object) {
-					  	if(typeof(object[key])!=="function") {
-					  		data[key] = object[key]+""
-					  	}
-					  }
-					  pdocs.push(data);
-					}
-					var start = window.performance.now();
-					pdb.bulkDocs(pdocs).then(function (result) {
-					  	var end = window.performance.now();
-					  	perfresults.PouchDB.persist.push(end-start);
-					  	start = window.performance.now();
-						pdb.find({selector: {id: find+""}}).then(function (result) {
-					  		end = window.performance.now();
-					  		perfresults.PouchDB.find.push(end-start);
-					  		console.log("PouchDB Expected:" + expectedResultCount + " Found:" + result.docs.length);
-					  		resolve(++count);
-						}).catch(function (err) {
-					  		console.log(err);
+			pdb.getIndexes().then(function(result) {
+				var index;
+				if(!result.indexes.some(function(item) {
+					if(item.name==="ids") {
+						pdb.deleteIndex(item).then(function() {
+							doit();
 						});
-					}).catch(function (err) {
-					  console.log(err);
-					});
-				}).catch(function (err) {
-				  console.log(err);
-				});
+					}
+				})) {
+					doit();
+				};
+				function doit() {
+					pdb.createIndex({
+					  index: {
+					  	name: "ids",
+					    fields: ['id']
+					  }
+					}).then(function (result) {
+						  	var pdocs = [];
+							for(var i=0;i<objects.length;i++) {
+							  var object = objects[i],data = {};
+							  for(var key in object) {
+							  	if(typeof(object[key])!=="function") {
+							  		data[key] = object[key]+""
+							  	}
+							  }
+							  pdocs.push(data);
+							}
+							var start = window.performance.now();
+							pdb.bulkDocs(pdocs).then(function (result) {
+							  	var end = window.performance.now();
+							  	perfresults.PouchDB.persist.push(end-start);
+							  	start = window.performance.now();
+								pdb.find({selector: {id: find+""}}).then(function (result) {
+							  		end = window.performance.now();
+							  		perfresults.PouchDB.find.push(end-start);
+							  		console.log("PouchDB Expected:" + expectedResultCount + " Found:" + result.docs.length);
+							  		resolve(++count);
+								}).catch(function (err) {
+							  		console.log(err);
+								});
+							}).catch(function (err) {
+							  console.log(err);
+							});
+						}).catch(function (err) {
+						  console.log(err);
+						});
+				}
 			});
 		});
 		promise.then(function(count) { if(count<iterations) return pouchdb(count); });
@@ -247,10 +283,6 @@ function test(objects,expectedResultCount,iterations) {
 			collection.save();	
 			end = window.performance.now();
 			perfresults.Forerunner.save.push(end-start);
-			start = window.performance.now();
-			collection.load();	
-			end = window.performance.now();
-			perfresults.Forerunner.load.push(end-start);
 			resolve(++count);
 		});
 		promise.then(function(count) { if(count<iterations) return forerunner(count); });
