@@ -19,4 +19,4 @@ Let us know what features you would like us to work on by Starring any enhanceme
 
 # updates
 
-2015-04-25 Initial public release v0.0.92
+2015-04-25 Initial public release v0.0.92 (626 Unit tests and growing ...)
