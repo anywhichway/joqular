@@ -1,3 +1,12 @@
+/*
+ * GNU GENERAL PUBLIC LICENSE
+ * Version 3, 29 June 2007
+ * Copyright 2015 (and left) AnyWhichWay, LLC and Simon Y. Blackwell
+ * 
+ * The software is provided as is without any guarantee of quality or applicability for any specific use.
+ * 
+ * Attribution for the work of others is in the source code, although none came with a license stipulation.
+ */
 (function(exports) {
 	"use strict";
 	function toPredicate(f) {

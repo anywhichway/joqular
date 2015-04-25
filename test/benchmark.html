@@ -1,6 +1,6 @@
 <html>
 <head>
-<script src="https://cdn.jsdelivr.net/polyfills/polyfill.js" type="text/javascript"></script>
+<script src="http://cdn.polyfill.io/v1/polyfill.min.js"></script>
 <script src="object-observe.js" type="text/javascript"></script>
 <script src="es6-promise.min.js" type="text/javascript"></script>
 <script src="es6-collections.min.js" type="text/javascript"></script>
@@ -68,10 +68,13 @@ function cleanup() {
 	indexedDB.deleteDatabase("JOQULARTest");
 }
 
-var numobj = 1000;
+var numobj = 10000;
 var find = Math.floor((Math.random() * 100) + 1);
 var objects = [];
-var loops = 1;
+var loops = 3;
+
+console.log("Running benchmark: " + numobj + " objects " + loops + " loops.");
+
 var i = loops;
 while(i-->0) {
 	var start =  window.performance.now();
