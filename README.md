@@ -16,6 +16,7 @@ Issues log and milestones when available: https://github.com/anywhichway/joqular
 
 Let us know what features you would like us to work on by Starring any enhancement issues. (Obviously, we will work on bugs.)
 
+npm install joqular
 
 # updates
 
