@@ -5,4 +5,4 @@ See the Wiki for detailed documentation: https://github.com/anywhichway/joqular/
 
 # updates
 
-2015-04-24 Initial public release v0.0.91
+2015-04-26 Initial public release v0.0.91

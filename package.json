@@ -1,0 +1,28 @@
+{
+  "name": "JOQULAR",
+  "version":"0.0.91",
+  "description": "(JOQULAR - JavaScript Object Query Labguage Representation) A high speed in-memory, isomophic, JavaScript database wih seriliazable queries.",
+  "main": "joqular.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anywhichway/joqular.git"
+  },
+  "keywords": [
+    "string",
+    "format",
+    "node.js",
+    "NodeJS"
+  ],
+  "author": "Simon Y. Blackwell <syblackwell@anywhichway.com> (http://www.github.com/anywhichway)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/anywhichway/joqular/issues"
+  },
+  "dependencies": {
+   
+  },
+  "homepage": "https://github.com/anywhichway/joqular"
+}
