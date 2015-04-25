@@ -1,5 +1,5 @@
 {
-  "name": "JOQULAR",
+  "name": "joqular",
   "version":"0.0.92",
   "description": "(JOQULAR - JavaScript Object Query Labguage Representation) A high speed in-memory, isomophic, JavaScript database wih seriliazable queries.",
   "main": "joqular.js",
