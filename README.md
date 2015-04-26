@@ -18,6 +18,37 @@ Let us know what features you would like us to work on by Starring any enhanceme
 
 npm install joqular
 
+# example query patterns
+
+// everyone named Joe
+{name: {eq: 'Joe'}} 
+// all adult women
+{age: {gte: 18}, gender: 'female'}} 
+// adult women Bainbridge Island and downtown Seattle
+{age: {gte: 18}, gender: 'female', address: {zipcode: {in: [98110,98101]}}}} 
+// all grandsons named the same as their grandfather
+{father: {father: {name: {'/': 'name'}}}} 
+// all partners who are partnered with the same gender
+{partner1: {gender: {'..partner2': 'gender'}}}
+// all partners who are not partnered with the same gender
+{partner1: {gender: {neq: {'..partner2': 'gender'}}}} 
+// Joe's children, if any are sick
+{name: 'Joe', {children: {some: function(child) { return child.isSick; }}}} 
+// Joe's children, if all are sick
+{name: 'Joe', {children: {every: function(child) { return child.isSick; }}}} 
+// [], unless all females are named Jo
+{gender: 'female', {forall: function(object) { return object.name==='Jo'; }}} 
+// all females if any are named Jo
+{gender: 'female', {exists: function(object) { return object.name==='Jo'; }}} 
+// anyone named Joe or Jo
+{name: {soundex: 'Joe'}} 
+// anyone who is female and authorized based on the value, i.e. 21 or over 
+function authorized(value) { return value>=21; }.predicate=true;
+{gender: 'female', {age: {$: authorized}}} 
+// anyone who is female and authorized based on the object, i.e. a volunteer 
+function authorized() { return this.volunteer }.predicate=true;
+{gender: 'female', $$: authorized}
+
 # updates
 
 2015-04-25 v0.0.92 Initial public release (626 Unit tests and growing ...)
