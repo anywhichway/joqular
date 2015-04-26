@@ -1287,6 +1287,7 @@
 					return soundex(this)===soundex(value);
 				});
 				String.prototype.soundex = String.prototype.echoes;
+				String.prototype.match.predicate = true;
 				if(config.enhanceDate) {
 					Date.prototype.joqularMatch = constructor.prototype.joqularMatch;
 					Object.defineProperty(Date.prototype,"time",{enumerable:true,configurable:false,set:function() { return; },get:function() { return this.getTime(); }});
