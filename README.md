@@ -26,4 +26,4 @@ npm install joqular
 
 2015-04-26 v0.0.93 Added patterns example, fixed recursion matching issue, added the $$ operator (628 Unit tests and growing ...)
 
-2015-04-26 v0.0.94 Added missing predicate declaration for String.prototype.match (632 Unit tests and growing ...)
+2015-04-26 v0.0.95 Added missing predicate declaration for String.prototype.match (632 Unit tests and growing ...)
