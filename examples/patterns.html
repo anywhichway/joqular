@@ -1,0 +1,80 @@
+<html>
+<head>
+</head>
+<body>
+<script src="http://cdn.polyfill.io/v1/polyfill.min.js"></script>
+<script src="../test/object-observe.js" type="text/javascript"></script>
+<script src="../test/es6-promise.min.js" type="text/javascript"></script>
+<script src="../test/es6-collections.min.js" type="text/javascript"></script>
+<script src="../joqular.js" type="text/javascript"></script>
+Open the developer tools in your browser to see this sample in action.
+
+<script type="text/javascript">
+"use strict";
+Object = JOQULAR.enhance(Object,{enhancePrimitives:true,enhanceArray:true,index:true});
+Object = JOQULAR.createIndex(Object);
+
+var joe1 = {name: 'Joe', age: 20, volunteer: true, father: {name: 'Bill', father: {name: 'Joe'}}, children: [{name: 'Mary', isSick: true},{name: 'John', isSick: true}]};
+var joe2 = {name: 'Joe', age: 24};
+var jo = {name: 'Jo', age: 18, gender: 'female', volunteer: true, address: {zipcode: 98110}};
+var p1 = {partner1: {gender: 'female'}, partner2: {gender: 'female'}};
+var p2 = {partner1: {gender: 'female'}, partner2: {gender: 'male'}};
+Object.joqularIndex(joe1);
+Object.joqularIndex(joe2);
+Object.joqularIndex(jo);
+Object.joqularIndex(p1);
+Object.joqularIndex(p2);
+
+// everyone named Joe
+console.log(JSON.stringify(Object.joqularFind({name: 'Joe'}))); // Note: Only primitives can be matched without an operator.
+
+// everyone named Joe
+console.log(JSON.stringify(Object.joqularFind({name: {eq: 'Joe'}})));
+
+// all adult women
+console.log(JSON.stringify(Object.joqularFind({age: {gte: 18}, gender: 'female'})));
+
+// adult women Bainbridge Island and downtown Seattle
+console.log(JSON.stringify(Object.joqularFind({age: {gte: 18}, gender: 'female', address: {zipcode: {in: [98110,98101]}}}))); 
+
+// all grandsons named the same as their grandfather
+console.log(JSON.stringify(Object.joqularFind({father: {father: {name: {'/': 'name'}}}})));
+
+// all partners who are partnered with the same gender
+console.log(JSON.stringify(Object.joqularFind({partner1: {gender: {'..partner2': 'gender'}}})));
+
+// all partners who are not partnered with the same gender
+console.log(JSON.stringify(Object.joqularFind({partner1: {gender: {neq: {'..partner2': 'gender'}}}}))); 
+
+// Joe's children, if any are sick
+console.log(JSON.stringify(Object.joqularFind({name: 'Joe', children: {some: function(child) { return child.isSick; }}})));
+
+// Joe's children, if all are sick
+console.log(JSON.stringify(Object.joqularFind({name: 'Joe', children: {every: function(child) { return child.isSick; }}})));
+
+// [], unless all females are named Jo
+console.log(JSON.stringify(Object.joqularFind({gender: 'female', forall: function(object) { return object.name==='Jo'; }})));
+ 
+// all females if any are named Jo
+console.log(JSON.stringify(Object.joqularFind({gender: 'female', exists: function(object) { return object.name==='Jo'; }})));
+
+// anyone named Joe or Jo
+console.log(JSON.stringify(Object.joqularFind({name: {soundex: 'Joe'}})));
+
+// only those 21 or over are authorized based on index value
+function authorizedWithValue(value) { 
+	return value >= 21; 
+};
+console.log(JSON.stringify(Object.joqularFind({age: {$: authorizedWithValue}})));
+
+// only those 21 or over are authorized based on instance
+function authorizedWithThis() { 
+	return this.volunteer; 
+};
+console.log(JSON.stringify(Object.joqularFind({gender: 'female', $$: authorizedWithThis})));
+ 
+</script>
+
+
+</body>
+</html>

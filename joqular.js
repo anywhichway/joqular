@@ -182,6 +182,12 @@
 			pattern = pattern.call(this,this.valueOf());
 		}
 		if(pattern!=null && typeof(pattern)==="object") {
+			if(pattern.$$ && typeof(pattern.$$)==="function") {
+				if(pattern.$$.call(scope[0])) {
+					return me;
+				}
+				return null;
+			}
 			if(pattern.$ && typeof(pattern.$)==="function") {
 				if(pattern.$(me.valueOf())) {
 					return me;
@@ -191,7 +197,7 @@
 			scope.push(me);
 			if(Object.keys(pattern).every(function(key) {
 				if(key==="forall" || key==="exists") {
-					return true;
+					return pattern[key](me);
 				}
 				var value1 = toObject(me[key]), value2 = pattern[key], type = typeof(value2);
 				if(value1!==undefined) {
@@ -392,14 +398,14 @@
 			});
 		}
 	}
-	function joqularFind(pattern,index,rootpattern,results,scope,scopekey,out) {
+	function joqularFind(pattern,index,rootpattern,results,scopes,scopekeys,out) {
 		if(pattern==null || index==null) return [];
 		rootpattern || (rootpattern = pattern);
 		out || (out = {});
-		var constructor = this, keys = Object.keys(pattern);
+		var constructor = this, keys = Object.keys(pattern), scope = (scopes ? scopes[0] : this);
 		if(pattern instanceof Date) keys.push("time");
 		keys.every(function(key) {
-			var value = pattern[key], type, matches = [], firstsubkey, subisref = false;
+			var value = pattern[key], type, matches = [], firstsubkey, subisref = false, scopekey = (scopekeys ? scopekeys[0] : key);
 			if(value === null) {
 				type = "undefined";
 			} else {
@@ -416,8 +422,9 @@
 							return;
 						}
 						out[id] = true;
+					} else {
+						delete index[key][type][value][id];
 					}
-					delete index[key][type][value][id];
 				});
 				results = (results ? intersection(results,matches) : matches);
 				return results.length > 0;
@@ -433,7 +440,7 @@
 					results = [];
 					var ids = Object.keys(constructor.ids);
 					ids.forEach(function(id) {
-						if(id!="nextId") {
+						if(id!="nextId" && !out[id]) {
 							if(constructor.ids[id].joqularMatch(rootpattern)) {
 								results.push(constructor.ids[id]);
 								return;
@@ -502,8 +509,9 @@
 								return;
 							}
 							out[id] = true;
+						} else {
+							delete scope[scopekey][type][instancevalue][id];
 						}
-						delete scope[scopekey][type][instancevalue][id];
 					});
 				});
 				results = (results ? intersection(results,matches) : matches);
@@ -527,11 +535,12 @@
 				} else {
 					var ids = Object.keys(constructor.ids);
 					if(ids.every(function(id) {
-						if(id==="nextId") return true;
+						if(id==="nextId" || out[id]) return true;
 						if(value(constructor.ids[id])) {
 							matches.push(constructor.ids[id]);
 							return true;
 						}
+						out[id] = true;
 						return false;
 					})) {
 						results = matches;
@@ -558,7 +567,7 @@
 				} else {
 					var ids = Object.keys(constructor.ids);
 					if(ids.some(function(id) {
-						if(id==="nextId") return false;
+						if(id==="nextId" || out[id]) return false;
 						if(value(constructor.ids[id])) {
 							return true;
 						}
@@ -575,7 +584,36 @@
 					return false;
 				}
 			}
-			if(scopekey && key==="$" && type==="function") {
+			if(key==="$$" && type==="function") {
+				var f = value;
+				if(results) {
+					results = results.filter(function(object) { return value.call(object); })
+					return results.length > 0;
+				} else {
+					["string","number","boolean","undefined"].forEach(function(type) {
+						var values =  joqularValues(scope[scopekey],type);
+						values.forEach(function(value) {
+							var ids = Object.keys(scope[scopekey][type][value]);
+							ids.forEach(function(id) {
+								if(id!="nextId" && !out[id]) {
+									if(constructor.ids[id]) {
+										if(f.call(constructor.ids[id]) && constructor.ids[id].joqularMatch(rootpattern)) {
+											matches.push(constructor.ids[id]);
+											return;
+										}
+										out[id] = true;
+									} else {
+										delete scope[scopekey][type][value][id];
+									}
+								}
+							});
+						});
+					});
+					results = (results ? intersection(results,matches) : matches);
+					return results.length > 0;
+				}
+			}
+			if(key==="$" && type==="function") {
 				var f = value;
 				["string","number","boolean","undefined"].forEach(function(type) {
 					var values =  joqularValues(scope[scopekey],type);
@@ -583,7 +621,7 @@
 						if(f(value)) {
 							var ids = Object.keys(scope[scopekey][type][value]);
 							ids.forEach(function(id) {
-								if(id!="nextId") {
+								if(id!="nextId" && !out[id]) {
 									if(constructor.ids[id]) {
 										if(constructor.ids[id].joqularMatch(rootpattern)) {
 											matches.push(constructor.ids[id]);
@@ -601,7 +639,7 @@
 				results = (results ? intersection(results,matches) : matches);
 				return results.length > 0;
 			}
-			if(scopekey && (subisref || key.indexOf("/")===0 || key.indexOf(".")===0)) {
+			if((subisref || key.indexOf("/")===0 || key.indexOf(".")===0)) {
 				if(!results) {
 					results = [];
 					var ids = Object.keys(constructor.ids);
@@ -621,20 +659,27 @@
 				}
 				return results.length > 0;
 			}
-			if(scopekey && scope[scopekey]["function"] && scope[scopekey]["function"][key]) {
+			if(scope[scopekey] && scope[scopekey]["function"] && scope[scopekey]["function"][key]) {
 				var ids = Object.keys(scope[scopekey]["function"][key]);
 				ids.forEach(function(id) {
-					if(constructor.ids[id]) {
-						if(constructor.ids[id][scopekey] && typeof(constructor.ids[id][scopekey][key])==="function") {
-							if(constructor.ids[id][scopekey][key].provider) {
-								if(constructor.ids[id][scopekey][key]()===value) {
+					if(!out[id] && constructor.ids[id]) {
+						var i = scopekeys.length-1, object = constructor.ids[id];
+						while(i>0) {
+							object = object[scopekeys[i]];
+							if(!object) return;
+							i--;
+						}
+						var instancevalue = object[scopekeys[i]];
+						if(instancevalue && typeof(instancevalue[key])==="function") {
+							if(instancevalue[key].provider) {
+								if(instancevalue[key]()===value) {
 									if(constructor.ids[id].joqularMatch(rootpattern)) {
 										matches.push(constructor.ids[id]);
 										return;
 									}
 									out[id] = true;
 								}
-							} else if(constructor.ids[id][scopekey][key](value)) { // otherwise we know it is a predicate
+							} else if(instancevalue[key](value)) { // otherwise we know it is a predicate
 								if(constructor.ids[id].joqularMatch(rootpattern)) {
 									matches.push(constructor.ids[id]);
 									return;
@@ -649,7 +694,13 @@
 				// not finalizing results here is intentional, there may be non-function oriented but same named matches
 			}
 			if(type==="object") {
-				var submatches = joqularFind.call(constructor,pattern[key],index[key],rootpattern,results,index,key,out);
+				scopes || (scopes = []);
+				scopes.unshift(index);
+				scopekeys || (scopekeys = []);
+				scopekeys.unshift(key);
+				var submatches = joqularFind.call(constructor,pattern[key],index[key],rootpattern,results,scopes,scopekeys,out);
+				scopes.shift();
+				scopekeys.shift();
 				matches = matches.concat(submatches);
 			}
 			results = (results ? intersection(results,matches) : matches);

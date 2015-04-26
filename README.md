@@ -20,5 +20,6 @@ npm install joqular
 
 # updates
 
-2015-04-25 Initial public release v0.0.92 (626 Unit tests and growing ...)
-2015-04-25 Initial public release v0.0.93 (626 Unit tests and growing ...) corrected typos in npm package
+2015-04-25 v0.0.92 Initial public release (626 Unit tests and growing ...)
+2015-04-25 v0.0.93 corrected typos in npm package  (626 Unit tests and growing ...)
+2015-04-26 v0.0.93 Added patterns example, fixed recursion matching issue, added the $$ operator (628 Unit tests and growing ...)

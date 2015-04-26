@@ -4,7 +4,7 @@
 <script src="object-observe.js" type="text/javascript"></script>
 <script src="es6-promise.min.js" type="text/javascript"></script>
 <script src="es6-collections.min.js" type="text/javascript"></script>
-<script src="../joqular.min.js" type="text/javascript"></script>
+<script src="../joqular.js" type="text/javascript"></script>
 </head>
 <body>
 Open browser development tools to see results of tests.
@@ -13,21 +13,14 @@ Open browser development tools to see results of tests.
 var RUNTEST;
 var LOGSUCCESS;
 
-
+function test$$() {
+	return this.aString==="astring";
+}
+function test$$Negative() {
+	return this.aString===null;
+}
 Object = JOQULAR.enhance(Object,{enhancePrimitives:true,enhanceArray:true,enhanceSet:true,enhanceDate:true,index:true,datastore:{name:"JOQULARTest",type:"IndexedDB",format:"pseudo-blob"}});
 Object = JOQULAR.createIndex(Object);
-
-var TimeSpan = JOQULAR.TimeSpan;
-var d1 = new Date();
-var d2 = new Date();
-d2.setTime(d1.getTime()+(24*60*60));
-var d3 = new Date();
-d3.setTime(d2.getTime()+(24*60*60));
-var du4 = new JOQULAR.TimeSpan();
-du4.startingTime = d3.getTime();
-
-var o = {name: 'Simon', number: 1, array1: [1,2,3], array2: [4,5,6], child: {name: 'Simon', child: {name: 'Simon'}}, sibling: {child: {name: 'Simon'}}, duration0: new JOQULAR.TimeSpan(d1), duration1: new JOQULAR.TimeSpan(d1,d2), duration2: new JOQULAR.TimeSpan(d2,d3), duration3: new JOQULAR.TimeSpan(d3), duration4: du4};
-
 
 var to = {
 	anUndefined: undefined,
@@ -114,6 +107,7 @@ var positivetests = [
 	{aOne: {nin: new Set([4,5,6])}},
 	{aNaN: {$: isNaN}},
 	{aString: "astring"},
+	{aString: "astring", $$: test$$},
 	{aString: {echoes: "astring"}},
 	{aString: {echoes: "astrng"}},
 	{aString: {lte: "astring"}},
@@ -285,6 +279,7 @@ var negativetests = [
 	{aString: {neq: "astring"}},
 	{aString: {eq: 1}},
 	{aString: {gte: "zzzzzz"}},
+	{aString: "astring", $$: test$$Negative},
 	{anObject: {aString: "anotherstring"}},
 	{anObject: {aChildObject: {aString: "anotherstring"}}},
 	{anObject: {aChildObject: {aGrandChildObject: {aString: "anotherstring"}}}},
@@ -323,7 +318,6 @@ var negativetests = [
 	{aSet1: {coincident: {'..': 'anArray2'}}},
 	{aSet1: {intersects: {'..': 'anArray2'}}},
 	{aSet1: {disjoint: {'..': 'anArray1'}}},
-	{aDate1: new Date(2013,0,15,12,30,30,500)},
 	{aDate1: {lt: new Date(2013,0,15,12,30,30,500)}},
 	{aDate1: {lte: new Date(2013,0,15,12,30,30,500)}},
 	{aDate1: {eq: new Date(2013,0,15,12,30,30,500)}},
@@ -414,7 +408,7 @@ positivetests.forEach(function(pattern,i) {
 	}
 });
 negativetests.forEach(function(pattern,i) {
-	var result = o.joqularMatch(pattern);
+	var result = to.joqularMatch(pattern);
 	if(!result) {
 		passed++;
 		if(LOGSUCCESS) console.log("Passed Negative Match Test: " + i + " " + JSON.stringify(pattern));
