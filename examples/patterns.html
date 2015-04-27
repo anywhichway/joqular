@@ -61,6 +61,9 @@ console.log(JSON.stringify(Object.joqularFind({gender: 'female', exists: functio
 // anyone named Joe or Jo
 console.log(JSON.stringify(Object.joqularFind({name: {soundex: 'Joe'}})));
 
+// anyone with a name starting in Jo
+console.log(JSON.stringify(Object.joqularFind({name: {match: /Jo*/}})));
+
 // only those 21 or over are authorized based on index value
 function authorizedWithValue(value) { 
 	return value >= 21; 
