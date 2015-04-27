@@ -14,7 +14,7 @@ See the Wiki for detailed documentation: https://github.com/anywhichway/joqular/
 
 Issues log and milestones when available: https://github.com/anywhichway/joqular/issues
 
-Let us know what features you would like us to work on by Starring any enhancement issues. (Obviously, we will work on bugs.)
+Let us know what features you would like us to work on by commenting on any enhancement issues. (Obviously, we will work on bugs.) https://github.com/anywhichway/joqular/issues?utf8=%E2%9C%93&q=label%3Aenhancement+
 
 npm install joqular
 
@@ -63,6 +63,10 @@ npm install joqular
 // anyone named Joe or Jo
 
 {name: {soundex: 'Joe'}} 
+
+// anyone with a name starting in Jo
+
+{name: {match: /Jo*/}}
 
 // anyone who is female and authorized based on the value, i.e. 21 or over 
 
