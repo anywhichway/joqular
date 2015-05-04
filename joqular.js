@@ -169,101 +169,260 @@
 			 
 				return result;
 	}
-	function joqularMatch(pattern,scope) {
-		scope || (scope = [this]);
+	function getRandomInt(min, max) {
+	    return Math.floor(Math.random() * (max - min + 1)) + min;
+	}
+	//Please cite as 
+	//Shanti R Rao and Potluri M Rao, "Sample Size Calculator", 
+	//Raosoft Inc., 2009, http://www.raosoft.com/samplesize.html
+
+	//probCriticalNormal function is adapted from an algorithm published
+	//in Numerical Recipes in Fortran.
+	function probCriticalNormal(P)
+	{
+//	      input p is confidence level convert it to
+//	      cumulative probability before computing critical
+
+		var   Y, Pr,	Real1, Real2, HOLD;
+		var  I;
+		var PN = [0,    // ARRAY[1..5] OF REAL
+				-0.322232431088  ,
+				 -1.0             ,
+				 -0.342242088547  ,
+				 -0.0204231210245 ,
+				 -0.453642210148E-4 ];
+
+		var QN = [0,   //  ARRAY[1..5] OF REAL
+				0.0993484626060 ,
+				 0.588581570495  ,
+				 0.531103462366  ,
+				 0.103537752850  ,
+				 0.38560700634E-2 ];
+
+		 Pr = 0.5 - P/2; // one side significance
+
+
+	  if ( Pr <=1.0E-8) HOLD = 6;
+		else {
+				if (Pr == 0.5) HOLD = 0;
+				else{
+						Y = Math.sqrt ( Math.log( 1.0 / (Pr * Pr) ) );
+						Real1 = PN[5];  Real2 = QN[5];
+
+						for ( I=4; I >= 1; I--)
+						{
+						  Real1 = Real1 * Y + PN[I];
+						  Real2 = Real2 * Y + QN[I];
+						}
+
+						HOLD = Y + Real1/Real2;
+				} // end of else pr = 0.5
+			} // end of else Pr <= 1.0E-8
+
+	  return HOLD;
+	}  // end of CriticalNormal
+
+	function sampleSize(confidence, margin, population)
+	{
+		var response = 50, pcn = probCriticalNormal(confidence / 100.0),
+	     d1 = pcn * pcn * response * (100.0 - response),
+	     d2 = (population - 1.0) * (margin * margin) + d1;
+	    if (d2 > 0.0)
+	     return Math.ceil(population * d1 / d2);
+	    return 0.0;
+	}
+	function crossProduct(args,test) {
+	  	  var end  = args.length - 1;
+	  	  var result = []
+	  	  function addTo(curr, start) {
+	  	    var first = args[start]
+	  	      , last  = (start === end)
+	  	    for (var i = 0; i < first.length; ++i) {
+	  	      var copy = curr.slice();
+	  	      copy.push(first[i])
+	  	      if (last) {
+	  	    	  if(!test || test(copy,result.length)) {
+	  	        	result.push(copy);
+	  	    	  }
+	  	      } else {
+	  	        addTo(copy, start + 1)
+	  	      }
+	  	    }
+	  	  }
+	  	  if (args.length) {
+	  	    addTo([], 0)
+	  	  } else {
+	  	    result.push([])
+	  	  }
+	  	  return result
+	}
+	function Sorter() {
+	    this.sorts = [];
+	}
+	Sorter.prototype.by = function(path,direction) {
+		this.sorts.push({path:path.split("."),direction:direction});
+	}
+	Sorter.prototype.sort = function(rows) {
 		var me = this;
+		rows.sort(function(rowa,rowb) {
+			var result;
+			me.sorts.some(function(spec) {
+				var alias = spec.path[0];
+				var valuea = rowa[alias];
+				var valueb = rowb[alias];
+				for(var i = 1;i < spec.path.length; i++) {
+					valuea = (valuea ? valuea[spec.path[i]] : valuea);
+					valueb = (valueb ? valueb[spec.path[i]] : valueb);
+				}
+				if(valuea===valueb) return result = 0;
+				if(spec.direction==="asc") {
+					if(valuea < valueb) return result = -1;
+					return result = 1;
+				}
+				if(valuea < valueb) return result = 1;
+				return result = -1;
+			});
+			return result;
+		});
+	}
+	// returns null or undefined if possibleReference is either of those values
+	// returns possibleReference as value if no aliases provided
+	// returns dereference.ignore if possibleReference is a reference and can be skipped
+	// otherwise returns an object representing the reference value, even if a primitive
+	function dereference(possibleReference,aliases) {
+		if(possibleReference===null || possibleReference===undefined || !aliases) {
+			return possibleReference;
+		}
+		var type = typeof(possibleReference);
+		if(type==="function") {
+			return possibleReference;
+		}
+		if(type==="object") {
+			var key = Object.keys(possibleReference)[0];
+			if(aliases instanceof Array) {
+				if(aliases.indexOf(key)>=0) {
+					return dereference.ignore;
+				}
+				return toObject(possibleReference);
+			} else if(aliases!=null && typeof(aliases)==="object" && aliases[key] && typeof(aliases[key])==="object") {
+				var path = possibleReference[key].split(".");
+				var value = aliases[key];
+				for(var i=0;i<path.length;i++) {
+					value = value[path[i]];
+					if(value===undefined) {
+						return undefined;
+					}
+				}
+				return toObject(value);
+			}
+		}
+		return toObject(possibleReference);
+	}
+	dereference.ignore = {};
+	function getIntrinsicType(value) {
+		return (value!=null ? typeof(value.valueOf()) : typeof(value));
+	}
+	function joqularMatch(pattern,aliases,scope) {
+		scope || (scope = [this]);
+		var me = this, keys, aliased = false;
+		if(typeof(pattern)==="function" && pattern.deferred) {
+			pattern = pattern.call(this,this.valueOf());
+		}
 		if(pattern===undefined || pattern.valueOf()===undefined) {
 			return null;
 		}
 		if(pattern===me || pattern===me.valueOf() || (pattern!=null && pattern.valueOf()===me.valueOf())) {
 			return me;
 		}
-		if(typeof(pattern)==="function" && pattern.deferred) {
-			pattern = pattern.call(this,this.valueOf());
-		}
-		if(pattern!=null && typeof(pattern)==="object") {
-			if(pattern.$$ && typeof(pattern.$$)==="function") {
-				if(pattern.$$.call(scope[0])) {
-					return me;
-				}
-				return null;
+		if(pattern!=null && getIntrinsicType(pattern)==="object") {
+			keys = Object.keys(pattern);
+			if(keys.length===0) {
+				return me;
 			}
-			if(pattern.$ && typeof(pattern.$)==="function") {
-				if(pattern.$(me.valueOf())) {
-					return me;
+			if(keys.every(function(key) {
+				if(key==='$$') {
+					return pattern.$$.call(scope[0]);
 				}
-				return null;
-			}
-			scope.push(me);
-			if(Object.keys(pattern).every(function(key) {
+				if(key==='$') {
+					return pattern.$(me.valueOf());
+				}
 				if(key==="forall" || key==="exists") {
 					return pattern[key](me);
 				}
-				var value1 = toObject(me[key]), value2 = pattern[key], type = typeof(value2);
+				var value1 = toObject(me[key]), type1 = getIntrinsicType(value1), value2s = [], value2;
 				if(value1!==undefined) {
-					if(value2!=null &&  (type==="object" || type==="function")) {
-						if(type==="function" && value2.deferred) {
-							value2 = value2(value1);
-							type = typeof(value2);
-						} else {
-							var path;
-							var possiblepath = Object.keys(value2)[0];
-							if(possiblepath) {
-								var anchor = null;
-								if(possiblepath.indexOf("/")===0) {
-									anchor = scope[0];
-									path = possiblepath.substring(1).split(".");
-									if(path[0]==="") {
-										path.shift();
-									}
-								} else if(possiblepath.indexOf("..")===0) {
-									if(scope.length-3<0) { return false; }
-									anchor = scope[scope.length-3];
-									path = possiblepath.substring(2).split(".");
-									if(path[0]==="") {
-										path.shift();
-									}
-								} else if(possiblepath.indexOf(".")===0) {
-									if(scope.length-2<0) { return false; }
-									anchor = scope[scope.length-2];
-									path = possiblepath.substring(1).split(".");
-									if(path[0]==="") {
-										path.shift();
-									}
-								}
-								if(anchor) {
-									path.push(value2[possiblepath]);
-									for(var i=0;i<path.length;i++) {
-										anchor = anchor[path[i]];
-										if(anchor===undefined) {
-											return false;
+					value2 = dereference(pattern[key],aliases);
+					if(value2===dereference.ignore) {
+						return true;
+					}
+					if(value2===undefined) {
+						return false;
+					}
+					value2s.push(value2);
+					return value2s.every(function(value2) {
+						var type2 = getIntrinsicType(value2);
+						if(value2!=null &&  (type2==="object" || type2==="function")) {
+							if(type2==="function" && value2.deferred) {
+								value2 = value2(value1);
+								type2 = getIntrinsicType(value2);
+							} else {
+								var path;
+								var possiblepath = Object.keys(value2)[0];
+								if(possiblepath) {
+									var anchor = null;
+									if(possiblepath.indexOf("/")===0) {
+										anchor = scope[0];
+										path = possiblepath.substring(1).split(".");
+										if(path[0]==="") {
+											path.shift();
+										}
+									} else if(possiblepath.indexOf("..")===0) {
+										if(scope.length-2<0) { return false; }
+										anchor = scope[scope.length-2];
+										path = possiblepath.substring(2).split(".");
+										if(path[0]==="") {
+											path.shift();
+										}
+									} else if(possiblepath.indexOf(".")===0) {
+										if(scope.length-1<0) { return false; }
+										anchor = scope[scope.length-1];
+										path = possiblepath.substring(1).split(".");
+										if(path[0]==="") {
+											path.shift();
 										}
 									}
-									value2 = anchor;
+									if(anchor) {
+										path.push(value2[possiblepath]);
+										for(var i=0;i<path.length;i++) {
+											anchor = anchor[path[i]];
+											if(anchor===undefined) {
+												return false;
+											}
+										}
+										value2 = anchor;
+									}
 								}
 							}
 						}
-					}
-					//if(key==="@" && value1 instanceof Object) {
-					//	if(value1.history instanceof History) {
-					//		return value1.history.joqularMatch(value2);
-					//	}
-					//	return false;
-					//}
-					return (value1===value2 || 
-						(value1!=null && value1.valueOf()===value2) ||
-						(value2!=null && value1===value2.valueOf()) || 
-						(value1!=null && value2!=null && value1.valueOf()===value2.valueOf()) ||
-						(typeof(value1)==="function" && value1.predicate && value1.call(me,value2)) ||
-						(typeof(value1)==="function" && value1.provider && value1.call(me)===value2) ||
-						(typeof(value1)!=="function" && value1.joqularMatch && value1.joqularMatch(value2,scope)));
+						//if(key==="@" && value1 instanceof Object) {
+						//	if(value1.history instanceof History) {
+						//		return value1.history.joqularMatch(value2);
+						//	}
+						//	return false;
+						//}
+						return (value1===value2 || 
+							(value1!=null && value1.valueOf()===value2) ||
+							(value2!=null && value1===value2.valueOf()) || 
+							(value1!=null && value2!=null && value1.valueOf()===value2.valueOf()) ||
+							(type1==="function" && value1.predicate && value1.call(me,(value2!=null ? value2.valueOf() : value2))) ||
+							(type1==="function" && value1.provider && value1.call(me)===(value2!=null ? value2.valueOf() : value2)) ||
+							(type1!=="function" && (type1!==type2 || type2==="object") && value1.joqularMatch && value1.joqularMatch(value2,aliases,scope.concat([me]))));
+					});
 				}
 				return false;
 			})) {
-				scope.pop();
 				return this;
 			}
-			scope.pop();
 			return null;
 		}
 		return null;
@@ -398,14 +557,41 @@
 			});
 		}
 	}
-	function joqularFind(pattern,index,rootpattern,results,scopes,scopekeys,out) {
+	function joqularFind(pattern,index,aliasnames,rootpattern,results,scopes,scopekeys,out) {
 		if(pattern==null || index==null) return [];
 		rootpattern || (rootpattern = pattern);
 		out || (out = {});
-		var constructor = this, keys = Object.keys(pattern), scope = (scopes ? scopes[0] : this);
+		var constructor = this, keys = Object.keys(pattern), scope = (scopes ? scopes[0] : this), direct = false;
 		if(pattern instanceof Date) keys.push("time");
+		if(keys.length===0 && (pattern.constructor==={}.constructor || (pattern.constructor===constructor))) {
+			results = [];
+			Object.keys(constructor.ids).forEach(function(id) {
+				if(id!=="nextId") {
+					results.push(constructor.ids[id]);
+				}
+			});
+			return results;
+		}
 		keys.every(function(key) {
+			if(aliasnames && aliasnames.indexOf(key)>=0) {
+				if(!results) {
+					results = [];
+					var ids = Object.keys(constructor.ids);
+					ids.forEach(function(id) {
+						if(id!="nextId" && !out[id]) {
+							if(constructor.ids[id].joqularMatch(rootpattern,aliasnames)) {
+								results.push(constructor.ids[id]);
+								return;
+							}
+							out[id] = true;
+						}
+					});
+					return results.length > 1
+				}
+				return true;
+			}
 			var value = pattern[key], type, matches = [], firstsubkey, subisref = false, scopekey = (scopekeys ? scopekeys[0] : key);
+			
 			if(value === null) {
 				type = "undefined";
 			} else {
@@ -417,7 +603,7 @@
 				ids.forEach(function(id) {
 					if(out[id]) return;
 					if(constructor.ids[id]) {
-						if(constructor.ids[id].joqularMatch(rootpattern)) {
+						if(constructor.ids[id].joqularMatch(rootpattern,aliasnames)) {
 							matches.push(constructor.ids[id]);
 							return;
 						}
@@ -426,12 +612,21 @@
 						delete index[key][type][value][id];
 					}
 				});
+				direct = true;
 				results = (results ? intersection(results,matches) : matches);
 				return results.length > 0;
 			}
 			if(type==="object") {
 				firstsubkey = Object.keys(value)[0];
+				// tag path references
 				subisref = (firstsubkey && (firstsubkey.indexOf("/")===0 || firstsubkey.indexOf(".")===0));
+				value = dereference(value,aliasnames);
+				if(value===dereference.ignore) {
+					return true;
+				}
+				if(value===undefined) {
+					return false;
+				}
 			}
 			if(type!=="object" && type!=="function" && ["lt","lte","eq","neq","gte","gt"].indexOf(key)>=0) {
 				var test = key;
@@ -441,13 +636,14 @@
 					var ids = Object.keys(constructor.ids);
 					ids.forEach(function(id) {
 						if(id!="nextId" && !out[id]) {
-							if(constructor.ids[id].joqularMatch(rootpattern)) {
+							if(constructor.ids[id].joqularMatch(rootpattern,aliasnames)) {
 								results.push(constructor.ids[id]);
 								return;
 							}
 							out[id] = true;
 						}
 					});
+					direct = true;
 					return results.length > 1;
 				}
 				var types = (type==="undefined" ? ["string","number","boolean","undefined"] : [type]);
@@ -504,7 +700,7 @@
 					ids.forEach(function(id) {
 						if(out[id]) return;
 						if(constructor.ids[id]) {
-							if(constructor.ids[id].joqularMatch(rootpattern)) {
+							if(constructor.ids[id].joqularMatch(rootpattern,aliasnames)) {
 								matches.push(constructor.ids[id]);
 								return;
 							}
@@ -514,50 +710,34 @@
 						}
 					});
 				});
+				direct = true;
 				results = (results ? intersection(results,matches) : matches);
 				return results.length > 0;
 			}
 			if(key==="forall" && type=="function") {
-				if(results) {
-					if(results.every(function(object) {
-						if(value(object)) {
-							matches.push(object);
-							return true;
-						}
-						return false;
-					})) {
-						results = (results ? intersection(results,matches) : matches);
-						return results.length > 0;
+				direct = true;
+				var ids = Object.keys(constructor.ids);
+				if(ids.every(function(id) {
+					if(id==="nextId" || out[id]) return true;
+					if(value(constructor.ids[id])) {
+						matches.push(constructor.ids[id]);
+						return true;
 					}
-					matches = [];
-					results = [];
+					out[id] = true;
 					return false;
-				} else {
-					var ids = Object.keys(constructor.ids);
-					if(ids.every(function(id) {
-						if(id==="nextId" || out[id]) return true;
-						if(value(constructor.ids[id])) {
-							matches.push(constructor.ids[id]);
-							return true;
-						}
-						out[id] = true;
-						return false;
-					})) {
-						results = matches;
-						return results.length > 0;
-					}
-					matches = [];
-					results = [];
-					return false;
+				})) {
+					results = (results ? intersection(results,matches) : matches);
+					return results.length > 0;
 				}
+				matches = [];
+				results = [];
+				return false;
 			}
 			if(key==="exists" && type=="function") {
+				direct = true;
 				if(results) {
 					if(results.some(function(object) {
-						if(value(object)) {
-							return true;
-						}
-						return false;
+						return value(object);
 					})) {
 						return results.length > 0;
 					}
@@ -568,15 +748,13 @@
 					var ids = Object.keys(constructor.ids);
 					if(ids.some(function(id) {
 						if(id==="nextId" || out[id]) return false;
-						if(value(constructor.ids[id])) {
-							return true;
-						}
-						return false;
+						return value(constructor.ids[id]);
 					})) {
-						results = [];
 						ids.forEach(function(id) {
-								results.push(constructor.ids[id]);
+							if(id==="nextId") return;
+							matches.push(constructor.ids[id]);
 						});
+						results = matches;
 						return results.length > 0;
 					}
 					matches = [];
@@ -585,6 +763,7 @@
 				}
 			}
 			if(key==="$$" && type==="function") {
+				direct = true;
 				var f = value;
 				if(results) {
 					results = results.filter(function(object) { return value.call(object); })
@@ -597,7 +776,7 @@
 							ids.forEach(function(id) {
 								if(id!="nextId" && !out[id]) {
 									if(constructor.ids[id]) {
-										if(f.call(constructor.ids[id]) && constructor.ids[id].joqularMatch(rootpattern)) {
+										if(f.call(constructor.ids[id]) && constructor.ids[id].joqularMatch(rootpattern,aliasnames)) {
 											matches.push(constructor.ids[id]);
 											return;
 										}
@@ -614,6 +793,7 @@
 				}
 			}
 			if(key==="$" && type==="function") {
+				direct = true;
 				var f = value;
 				["string","number","boolean","undefined"].forEach(function(type) {
 					var values =  joqularValues(scope[scopekey],type);
@@ -623,7 +803,7 @@
 							ids.forEach(function(id) {
 								if(id!="nextId" && !out[id]) {
 									if(constructor.ids[id]) {
-										if(constructor.ids[id].joqularMatch(rootpattern)) {
+										if(constructor.ids[id].joqularMatch(rootpattern,aliasnames)) {
 											matches.push(constructor.ids[id]);
 											return;
 										}
@@ -645,7 +825,7 @@
 					var ids = Object.keys(constructor.ids);
 					ids.forEach(function(id) {
 						if(id!="nextId") {
-							if(constructor.ids[id].joqularMatch(rootpattern)) {
+							if(constructor.ids[id].joqularMatch(rootpattern,aliasnames)) {
 								results.push(constructor.ids[id]);
 								return;
 							}
@@ -654,9 +834,10 @@
 					});
 				} else {
 					results = results.filter(function(object) {
-					return object.joqularMatch(rootpattern);
+					return object.joqularMatch(rootpattern,aliasnames);
 					});
 				}
+				direct = true;
 				return results.length > 0;
 			}
 			if(scope[scopekey] && scope[scopekey]["function"] && scope[scopekey]["function"][key]) {
@@ -673,14 +854,14 @@
 						if(instancevalue && typeof(instancevalue[key])==="function") {
 							if(instancevalue[key].provider) {
 								if(instancevalue[key]()===value) {
-									if(constructor.ids[id].joqularMatch(rootpattern)) {
+									if(constructor.ids[id].joqularMatch(rootpattern,aliasnames)) {
 										matches.push(constructor.ids[id]);
 										return;
 									}
 									out[id] = true;
 								}
 							} else if(instancevalue[key](value)) { // otherwise we know it is a predicate
-								if(constructor.ids[id].joqularMatch(rootpattern)) {
+								if(constructor.ids[id].joqularMatch(rootpattern,aliasnames)) {
 									matches.push(constructor.ids[id]);
 									return;
 								}
@@ -691,6 +872,7 @@
 						delete scope[scopekey]["function"][key][id];
 					}
 				});
+				direct = true;
 				// not finalizing results here is intentional, there may be non-function oriented but same named matches
 			}
 			if(type==="object") {
@@ -698,7 +880,8 @@
 				scopes.unshift(index);
 				scopekeys || (scopekeys = []);
 				scopekeys.unshift(key);
-				var submatches = joqularFind.call(constructor,pattern[key],index[key],rootpattern,results,scopes,scopekeys,out);
+				var submatches = joqularFind.call(constructor,pattern[key],index[key],aliasnames,rootpattern,results,scopes,scopekeys,out);
+				direct = submatches.direct;
 				scopes.shift();
 				scopekeys.shift();
 				matches = matches.concat(submatches);
@@ -706,7 +889,259 @@
 			results = (results ? intersection(results,matches) : matches);
 			return results.length > 0;
 		});
-		return (results || []);
+		if(!results) {
+			results = [];
+			results.direct = direct;
+		}
+		return results;
+	}
+	function Pattern(pattern) {
+		this.value = pattern;
+	}
+	Pattern.prototype.toJSON = function() {
+		return this.value;
+	}
+	function Statement(projection) {
+		
+	}
+	function Select(projection) {
+		this.projection = projection;
+	}
+	Select.prototype = new Statement();
+	Select.prototype.exec = function(wait) {
+		var me = this;
+		function doit() {
+			var aliasnames = Object.keys(me.aliases), selfs = [],  compare = {};
+			if(!aliasnames.every(function(aliasname) {
+				var pattern = {};
+				if(me.patterns && me.patterns[aliasname]) {
+					var keys = Object.keys(me.patterns[aliasname].value);
+					keys.forEach(function(key) {
+						if(key=="eq" || key=="neq") { // collect object comparisons
+							compare[aliasname] || (compare[aliasname] = {});
+							compare[aliasname][key] = me.patterns[aliasname].value[key];
+							// reflexive test
+							compare[me.patterns[aliasname].value[key]] || (compare[me.patterns[aliasname].value[key]] = {});
+							compare[me.patterns[aliasname].value[key]][key] = aliasname;
+						} else {
+							pattern[key] = me.patterns[aliasname].value[key];
+						}
+					});
+				}
+				var matches = me.aliases[aliasname].joqularFind(pattern,false,aliasnames);
+				if(matches.length===0) {
+					if(!matches.direct) {
+						matches = [];
+						var ids = Object.keys(me.aliases[aliasname].ids);
+						ids.forEach(function(id) {
+							if(id!="nextId") {
+								matches.push(me.aliases[aliasname].ids[id]);
+							}
+						});
+					}
+					if(matches.length===0) {
+						return false;
+					}
+				}
+				selfs.push(matches);
+				return true;
+			})) {
+				return [];
+			};
+			if(selfs.length>0) {
+				var rows = crossProduct(selfs,function(row,i) {
+					if(me.firstCount!=null && i>=me.firstCount && !me.ordering && me.confidenceLevel==null && me.sampleSize==null) {
+						return false;
+					}
+					var aliases = {};
+					row.forEach(function(object,i) {
+						aliases[aliasnames[i]] = object;
+					});
+					return row.every(function(object,i) {
+							var aliasname = aliasnames[i], pattern = {};
+							// compare objects if required
+							if(compare[aliasname]) {
+								var tests = Object.keys(compare[aliasname]);
+								if(!tests.every(function(test) {
+									var otheraliasnames = compare[aliasname][test];
+									if(typeof(otheraliasnames)==="string") {
+										otheraliasnames = [otheraliasnames];
+									}
+									return otheraliasnames.every(function(otheraliasname) {
+										var j = aliasnames.indexOf(otheraliasname), otherobject = row[j];
+										if(test==="eq") {
+											return object===otherobject;
+										} else { // neq
+											return object!==otherobject;
+										}
+									});
+								})) {
+									return false;
+								}
+							}
+							// get pattern for current object type
+							if(me.patterns && me.patterns[aliasname]) {
+								pattern = me.patterns[aliasname].value;
+							}
+							// match object to pattern, passing in aliases so that cross-references can be resolved
+							if(joqularMatch.call(object,pattern,aliases)) {
+								row[aliasname] = object;
+								return true;
+							}
+							return false;
+					});
+				});
+				if(me.sampleSize!=null || (me.confidenceLevel!=null && me.marginOfError!=null)) {
+					if(me.randomize) {
+						rows.sort(function(a,b) {
+							return getRandomInt(-1,1);
+						});
+					}
+					var size, samples = [];
+					if(me.confidenceLevel!=null && me.marginOfError!=null) {
+						size = sampleSize(me.confidenceLevel, me.marginOfError, rows.length)
+					} else if(me.sampleSize>=1) {
+						size = Math.floor(me.sampleSize);
+					} else {
+						size = Math.max(1,Math.round(me.sampleSize * rows.length));
+					}
+					if(size<rows.length) {
+						while(samples.length < size) {
+							var offset = getRandomInt(0,rows.length-1);
+							samples.push(rows[offset]);
+							rows.splice(offset,1);
+						}
+						rows = samples;
+					}
+				}
+				if(me.ordering) {
+					var sorter = new Sorter(), pathkeys = Object.keys(me.ordering);
+					pathkeys.forEach(function(pathkey) {
+						sorter.by(pathkey,me.ordering[pathkey]);
+					});
+					sorter.sort(rows);
+				}
+				if(me.firstCount!=null) {
+					if(rows.length>me.firstCount) {
+						rows = rows.slice(0,me.firstCount);
+					}
+				} else if(me.lastCount!=null) {
+					if(rows.length>=me.lastCount) {
+						rows = rows.slice(-me.lastCount);
+					}
+				}
+				if(me.projection) {
+					rows.forEach(function(row,i) {
+						var projection = {}, columns = Object.keys(me.projection);
+						columns.forEach(function(column) {
+							var reference = me.projection[column], aliasname = Object.keys(reference)[0], path = reference[aliasname].split(".");
+							var value = row[aliasname];
+							for(var i=0;i<path.length;i++) {
+								value = value[path[i]];
+								if(value===undefined) return;
+							}
+							projection[column] = value;
+						});
+						rows[i] = [projection];
+					});
+				}
+				return rows;
+			}
+			return [];
+		}
+		if(typeof(wait)==="function") {
+			wait(null,doit())
+		} else if(wait===true) {
+			return new Promise(function(resolve,reject) {
+				resolve(doit());
+			});
+		} else {
+			return doit();
+		}
+	}
+	Select.prototype.toJSON = function() {
+		var me = this, json = {};
+		if(me.projection) {
+			json.projection = me.projection;
+		}
+		if(me.firstCount) {
+			json.first = me.firstCount;
+		} else if(me.lastCount) {
+			json.last = me.firstCount;
+		}
+		if(me.sampleSize) {
+			json.sample = me.sampleSize;
+		}
+		if(me.confidenceLevel) {
+			json.sample = [me.confidenceLevel,me.marginOfError];
+		}
+		if(me.randomize) {
+			json.randomize = me.randomize;
+		}
+		var aliases = Object.keys(me.aliases);
+		aliases.forEach(function(alias) {
+			json.from || (json.from = {});
+			json.from[alias] = me.aliases[alias].name;
+		});
+		if(me.patterns) {
+			aliases = Object.keys(me.patterns);
+			aliases.forEach(function(alias) {
+				json.where || (json.where = {});
+				json.where[alias] = me.patterns[alias];
+			});
+		}
+		if(me.ordering) {
+			json.orderBy = me.ordering;
+		}
+		return {select: json};
+	}
+	//Select.prototype.into = function(constructor) {
+	//	this.impacts = [constructor];
+	//}
+	Select.prototype.first = function(first) {
+		this.firstCount = first;
+		delete this.lastCount;
+		return this;
+	}
+	Select.prototype.last = function(last) {
+		this.lastCount = last;
+		delete this.firstCount;
+		return this;
+	}
+	Select.prototype.sample = function(sizeOrConfidenceLevel,randomizeOrMarginOfError,randomize) { // 2 args statistical, int count, float percent
+		if(arguments.length>=2 && typeof(randomizeOrMarginOfError)==="number") {
+			this.confidenceLevel = sizeOrConfidenceLevel;
+			this.marginOfError = randomizeOrMarginOfError;
+			this.randomize = randomize;
+		} else if(arguments.length===1 || typeof(randomizeOrMarginOfError)==="boolean") {
+			this.sampleSize = sizeOrConfidenceLevel;
+			this.randomize = randomizeOrMarginOfError;
+		}
+		return this;
+	}
+	Select.prototype.from = function(aliases) {
+		this.aliases = aliases;
+		return this;
+	}
+	Select.prototype.where = function(patterns) {
+		var me = this;
+		me.patterns = {};
+		var aliases = Object.keys(me.aliases), patternaliases = Object.keys(patterns);
+		patternaliases.forEach(function(alias) {
+			if(aliases.indexOf(alias)>=0) {
+				me.patterns[alias] = new Pattern(patterns[alias]);
+				return true;
+			}
+			throw new Error("The top level pattern " + JSON.stringify(new Pattern(patterns[alias])) + " does not refer to a class");
+		});
+		return me;
+	}
+	Select.prototype.orderBy = function(ordering) {
+		this.ordering = ordering;
+		return this;
+	}
+	function joqularSelect(projection) {
+		return new Select(projection);
 	}
 	var JOQULAR = {
 			enhance: function(constructor,config) {
@@ -900,7 +1335,7 @@
 					config.enhancePrimitives = true;
 					config.enhanceArray = true;
 					config.ehhanceDate = true;
-					constructor.joqularFind = function(pattern,wait) {
+					constructor.joqularFind = function(pattern,wait,aliasnames) {
 						function dowait(f) {
 							if(Object.keys(me.indexing).length===0) {
 								f();
@@ -911,18 +1346,19 @@
 						var me = this;
 						if(wait) {
 							if(typeof(wait)==="function") {
-								dowait(function() { wait(null,joqularFind.call(me,pattern,me.index)); });
+								dowait(function() {  
+									wait(null,joqularFind.call(me,pattern,me.index,aliasnames));  
+								});
 							} else {
 								return new Promise(function(resolve,reject) {
-									dowait(function() { resolve(joqularFind.call(me,pattern,me.index)); });
+									dowait(function() { resolve(joqularFind.call(me,pattern,me.index,aliasnames)); });
 								});
 							}
 						}
-						return joqularFind.call(me,pattern,me.index);
+						return joqularFind.call(me,pattern,me.index,aliasnames);
 					};
 					constructor.joqularIndex = function(instance,async) {
-						var me = this;
-						var id = me.ids.nextId;
+						var me = this, id = me.ids.nextId;
 						me.ids.nextId++;
 						me.ids[id] = instance;
 						if(async) {
@@ -1186,7 +1622,7 @@
 					if(this===value) {
 						return true;
 					}
-					if(!value instanceof TimeSpan) {
+					if(!(value instanceof TimeSpan)) {
 						return false;
 					}
 					return new Time(this.startingTime,precision).valueOf() === new Time(value.startingTime,precision).valueOf() &&
@@ -1237,8 +1673,8 @@
 					}
 					return 0;
 				});
-				constructor.prototype.joqularMatch = function(pattern,scope) {
-					return joqularMatch.call(this,pattern,scope);
+				constructor.prototype.joqularMatch = function(pattern,aliases,scope) {
+					return joqularMatch.call(this,pattern,aliases,scope);
 				};
 				(constructor.prototype["instanceof"] = function(constructor) {
 					return this instanceof constructor;
@@ -1281,6 +1717,12 @@
 						(primitive.prototype.nin = function(value) {
 							return !value || !value.contains || !value.contains(this);
 						}).predicate=true;
+						primitive.prototype.between = toPredicate(function(bound1,bound2) {
+							return (this.valueOf() >= bound1 && this.valueOf() <= bound2) || (this.valueOf() >= bound2 && this.valueOf() <= bound1);
+						});
+						primitive.prototype.outside = toPredicate(function(bound1,bound2) {
+							return !this.between(bound1,bound2);
+						});
 					});
 				}
 				String.prototype.echoes = toPredicate(function(value) {
@@ -1533,7 +1975,7 @@
 					Set.prototype.eq =  toPredicate(function(value) {
 						var me = this;
 						if(this===value) { return true; }
-						if(!(value instanceof Set) || this.size!==this.size) {
+						if(!(value instanceof Set) || this.size!==value.size) {
 							return false;
 						}
 						return me.every(function(item) {
@@ -1567,6 +2009,7 @@
 					});
 				}
 				JOQULAR.createIndex = createIndex;
+				JOQULAR.select = joqularSelect;
 				JOQULAR.TimeSpan = TimeSpan;
 				JOQULAR.Time = Time;
 				JOQULAR.Duration = Duration;
