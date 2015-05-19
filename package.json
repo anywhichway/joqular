@@ -22,7 +22,8 @@
     "WebDB",
     "WebSQL",
     "database",
-    "SQL"
+    "SQL",
+    "NoSQL"
   ],
   "author": "Simon Y. Blackwell <syblackwell@anywhichway.com> (http://www.github.com/anywhichway)",
   "license": "GPL3",
