@@ -2,12 +2,12 @@
 JavaScript Object Query Language Representation - Funny, it's mostly JSON.
 
 - Serializable pattern and SQL like object matching for JavaScript, including joins!
+- Use Insert, Update, Delete to modify objects and indexes, or configure indexes to update automatically with zero configuration indexing.
 - More built-in predicates/operators than most other other data query mechanisms, currently 44. Includes built in random and statistical sampling capability.
 - Extensible with just one line of code per predicate/query operator. Puts the intelligence in your data, not the database engine.
-- Just-in-time, fully indexed in-memory database, 2x to 10x faster than linear search, faster than IndexedDB and PouchDB for insert and search.
-- Indexes represent the live state of JavaScript objects. Query results are also live objects or POJO projections, your choice.
+- Just-in-time, fully indexed in-memory database, 2x to 10x faster than linear search, faster than Forerunner, IndexedDB and PouchDB for insert and search.
+- Indexes represent the live state of JavaScript objects. Query results are also live objects or POJO projections, your choice. POJO key value formatting using a built-in or developer specified format function.
 - Extensive Date and Time comparisons with precision at the year, month, day, hour, second, millisecond
-- Optional zero configuration indexing and persistence.
 - 3-Way Single Function You Choose API ... callbacks, Promises, return values.
 
 See the Wiki for detailed documentation: https://github.com/anywhichway/joqular/wiki
@@ -103,6 +103,8 @@ select().last(10).from({p1: Person}).where(`<any of the above patterns>`);
 select().sample(.95,.03).from({p1: Person});
 
 # updates
+
+2015-06-01 v1.02.01 Added SQL like Insert, Update, Delete. Further optimized indexing and search. Formatting capability added for POJO projections using Select. Two "breaking" changes. Index format changed in a manner that is not compatible with current persisted indexes. No automated migration currently available. Modified syntax to require a $ sign before any function references in patterns and queries in order to provide hints to query optimizer. Simple global replace on an existing function references to address the change.
 
 2015-05-11 v1.01.02 Extended ability to reference data across patterns when using providers. Reversed ordering of update info and reformatted examples in README. (1,193 Unit tests and growing ...)
 

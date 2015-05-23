@@ -32,12 +32,12 @@ var to = {
 	aNaN: NaN,
 	aString: "astring",
 	anObject: {
-		aString: "astring",
+		anotherString: "astring",
 		aChildObject: {
-			aString: "astring",
+			anotherString: "astring",
 			aGrandChildObject: {
-				aString: "astring",
-				aNaN: NaN
+				anotherString: "astring",
+				anotherNaN: NaN
 			}
 		}
 	},
@@ -118,18 +118,20 @@ var positivetests = [
 	{aString: {$neq: "anotherstring"}},
 	{aString: {$neq: 1}},
 	{aString: {$gte: "astring"}},
-	{anObject: {aString: "astring"}},
-	{anObject: {aChildObject: {aString: "astring"}}},
-	{anObject: {aChildObject: {aGrandChildObject: {aString: "astring"}}}},
-	{anObject: {aChildObject: {aGrandChildObject: {aString: "astring", aNaN: {$: isNaN}}}}},
-	{anObject: {aChildObject: {aGrandChildObject: {aString: {$eq: {'/': "aString"}}}}}}, // root
-	{anObject: {aChildObject: {aGrandChildObject: {aString: {$eq: {'/anObject': "aString"}}}}}}, // anObject
-	{anObject: {aChildObject: {aGrandChildObject: {aString: {$eq: {'/anObject.aChildObject': "aString"}}}}}}, // parent
-	{anObject: {aChildObject: {aGrandChildObject: {aString: {$eq: {'/anObject.aChildObject.aGrandChildObject': "aString"}}}}}}, // back down to self
-	{anObject: {aChildObject: {aGrandChildObject: {aString: {$eq: {'..': "aString"}}}}}}, // parent
-	{anObject: {aChildObject: {aGrandChildObject: {aString: {$eq: {'..aGrandChildObject': "aString"}}}}}}, // back down to self
-	{anObject: {aChildObject: {aGrandChildObject: {aString: {$eq: {'.': "aString"}}}}}}, // self
+	{anObject: {anotherString: "astring"}},
+	{anObject: {aChildObject: {anotherString: "astring"}}},
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: "astring"}}}},
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: "astring", anotherNaN: {$: isNaN}}}}},
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$eq: {'/': "aString"}}}}}}, // root
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$eq: {'/anObject': "anotherString"}}}}}}, // anObject
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$eq: {'/anObject.aChildObject': "anotherString"}}}}}}, // parent
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$eq: {'/anObject.aChildObject.aGrandChildObject': "anotherString"}}}}}}, // back down to self
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$eq: {'..': "anotherString"}}}}}}, // parent
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$eq: {'..aGrandChildObject': "anotherString"}}}}}}, // back down to self
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$eq: {'.': "anotherString"}}}}}}, // self
 	{anArray1: [1,2,3,4]},
+	{anArray1: {length: 4}},
+	{anArray1: {length: {$eq: 4}}},
 	{anArray1: {$count: 4}},
 	{anArray1: {$min: 1}},
 	{anArray1: {$max: 4}},
@@ -253,8 +255,8 @@ var positivetests = [
 	{aTimeSpan1: {$before: new JOQULAR.Time(Infinity)}},
 	{aTimeSpan1: {$after: new JOQULAR.Time(-Infinity)}},
 	{aTimeSpan1: {$adjacent: [new Date(2016,1,15,12,30,30,500),"Y"]}},
-	{$exists: function(object) { return object.aString!==null; }},
-	{$forall: function(object) { return object.__proto__!==null; }},
+	{aOne: 1, $exists: function(object) { return object.aString!==null; }},
+	{aOne: 1, $forall: function(object) { return object.__proto__!==null; }},
 	{aString: "astring", $exists: function(object) { return object.aString!==null; }},
 	{aString: "astring", $forall: function(object) { return object.__proto_!==null; }}
 ];
@@ -297,17 +299,17 @@ var negativetests = [
 	{aString: {$eq: 1}},
 	{aString: {$gte: "zzzzzz"}},
 	{aString: "astring", $$: test$$Negative},
-	{anObject: {aString: "anotherstring"}},
-	{anObject: {aChildObject: {aString: "anotherstring"}}},
-	{anObject: {aChildObject: {aGrandChildObject: {aString: "anotherstring"}}}},
-	{anObject: {aChildObject: {aGrandChildObject: {aString: "anotherstring", aNaN: {$: isNaN}}}}},
-	{anObject: {aChildObject: {aGrandChildObject: {aString: {$neq: {'/': "aString"}}}}}}, // root
-	{anObject: {aChildObject: {aGrandChildObject: {aString: {$neq: {'/anObject': "aString"}}}}}}, // anObject
-	{anObject: {aChildObject: {aGrandChildObject: {aString: {$neq: {'/anObject.aChildObject': "aString"}}}}}}, // parent
-	{anObject: {aChildObject: {aGrandChildObject: {aString: {$neq: {'/anObject.aChildObject.aGrandChildObject': "aString"}}}}}}, // back down to self
-	{anObject: {aChildObject: {aGrandChildObject: {aString: {$neq: {'..': "aString"}}}}}}, // parent
-	{anObject: {aChildObject: {aGrandChildObject: {aString: {$neq: {'..aGrandChildObject': "aString"}}}}}}, // back down to self
-	{anObject: {aChildObject: {aGrandChildObject: {aString: {$neq: {'.': "aString"}}}}}}, // self
+	{anObject: {anotherString: "anotherstring"}},
+	{anObject: {aChildObject: {anotherString: "anotherstring"}}},
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: "anotherstring"}}}},
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: "anotherstring", aNaN: {$: isNaN}}}}},
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$neq: {'/': "aString"}}}}}}, // root
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$neq: {'/anObject': "anotherString"}}}}}}, // anObject
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$neq: {'/anObject.aChildObject': "anotherString"}}}}}}, // parent
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$neq: {'/anObject.aChildObject.aGrandChildObject': "anotherString"}}}}}}, // back down to self
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$neq: {'..': "anotherString"}}}}}}, // parent
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$neq: {'..aGrandChildObject': "anotherString"}}}}}}, // back down to self
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$neq: {'.': "anotherString"}}}}}}, // self
 	{anArray1: [5,6,7,8]},
 	{anArray1: {$count: 3}},
 	{anArray1: {$min: 0}},
@@ -404,7 +406,7 @@ var negativetests = [
 	{anHour: {$neq: [new JOQULAR.Duration(1,"h"),"h"]}},
 	{anHour: {$eq: [new JOQULAR.Duration(2,"h"),"h"]}},
 	{anHour: {$lt: [new JOQULAR.Duration(1,"h"),"h"]}},
-	{anHour: {$ltt: [new JOQULAR.Duration(59,"m"),"h"]}},
+	{anHour: {$lt: [new JOQULAR.Duration(59,"m"),"h"]}},
 	{aTimeSpan1: {$disjoint: {'..': 'aTimeSpan2'}}},
 	{aTimeSpan1: {$disjoint: {'..': 'aTimeSpan3'}}},
 	{aTimeSpan1: {$disjoint: {'..': 'aTimeSpan4'}}},
@@ -564,6 +566,8 @@ var querytests = [
 	[JOQULAR.select().from({p1: Person}).where({p1: {name: 'Bill', age: {$between:[53,55]}}}),1],
 	[JOQULAR.select().from({p1: Person}).where({p1: {name: 'Bill', age: {$outside:[18,20]}}}),1],
 	[JOQULAR.select().from({p1: Person, p2: Person}).where({p2: {faith: {$eq: {p1: 'faith'}}, gender: {$neq: {p1: 'gender'}}}}),2],
+	[JOQULAR.select({firstName: {p1: 'name'}}).from({p1: Person}).where({p1: {name: 'Bill'}}),function(results) { return results.length===1 && results[0][0].firstName==='Bill'}],
+	[JOQULAR.select({zipcode: {p1: 'address.zipcode'}}).from({p1: Person}).where({p1: {address: {zipcode: 98110}}}),function(results) { return results.length===50 && results[0][0].zipcode===98110}]
 ];
 querytests.run = [];
 
@@ -572,7 +576,7 @@ querytests.forEach(function(test,i) {
 		var query = test[0];
 		var expected = test[1];
 		var result = query.exec();
-		if(result.length===expected) {
+		if((typeof(expected)==="number" && result.length===expected) || expected(result)) {
 			passed++;
 			if(LOGSUCCESS) console.log("Passed Query Test: " + i + " " + JSON.stringify(query));
 		} else {
@@ -602,7 +606,7 @@ querytests.forEach(function(test,i) {
 		var expected = test[1];
 		var promise = query.exec(true);
 		promise.then(function(result) {
-			if(result.length===expected) {
+			if((typeof(expected)==="number" && result.length===expected) || expected(result)) {
 				passed++;
 				if(LOGSUCCESS) console.log("Passed Promise Query Test: " + i + " " + JSON.stringify(query));
 			} else {

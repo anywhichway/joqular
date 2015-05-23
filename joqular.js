@@ -54,16 +54,6 @@
 		}
 		return undefined; // should this actually throw an error?
 	}
-	function kindof(value) {
-		if(value==null) {
-			return "undefined";
-		}
-		var type = typeof(value.valueOf());
-		if(["number","boolean","string","function"].indexOf(type)>=0) {
-			return type;
-		}
-		return value.constructor.name;
-	}
 	// soundex from https://gist.github.com/shawndumas/1262659
 	function soundex(s) {
 	     var a = s.toLowerCase().split(''),
@@ -340,6 +330,9 @@
 				if(["lt","lte","eq","neq","gte","gt"].indexOf(possiblepath)>=0 && possibleReference[possiblepath]!==undefined) {
 					test = possiblepath;
 					value = possibleReference[test];
+					if(value instanceof Array) {
+						return {test: test, value: value};
+					}
 					if(possibleReference[test] && typeof(possibleReference[test])!=="string") {
 						possiblepath = Object.keys(possibleReference[test])[0];
 					}
@@ -484,80 +477,27 @@
 	function Key() {
 		
 	}
-	Key.prototype.find = function(index,scopes,scopekey,scopekind,value,results) {
-		var me = this, kindname = value.constructor.name, values = {};
-		if(kindname==="Function") {
-			return value(index,scopes,scopekey,scopekind,results);
-		}
-		if(me[kindname]) {
-			me[kindname].find(index,scopes,scopekey,scopekind,value,results);
-			return results.length>0;
-		}
-		if(value.test && me.Null) {
-			if(value[value.test](null)) {
-				var tmp = (results.length > 0 ? intersection(results,me.Null.getIds()) : me.Null.getIds());
-				tmp = (results.length > 0 ? intersection(results,tmp) : tmp);
-				results.splice.apply(results,[0,results.length].concat(tmp));
-				results.index = true;
-			} else {
-				results.splice(0,results.length);
-			}
-			return results.length>0;
-		}
-		if(value.test==="neq") {
-			var kindnames = Object.keys(me), tmp = [];
-			kindnames.forEach(function(kindname) {
-				tmp = tmp.concat(me[kindname].getIds());
-			});
-			tmp = (results.length > 0 ? intersection(results,tmp) : tmp);
-			results.splice.apply(results,[0,results.length].concat(tmp));
-			results.index = true;
-			return results.length>0;
-		}
-		if(["Boolean","Number","String","Null"].indexOf(kindname)===-1) {
-			var kindnames = Object.keys(me), add = [];
-			kindnames.forEach(function(kindname) {
-				var possibletests = Object.keys(value), tmp = [];
-				if(possibletests.every(function(possibletest) {
-					if(me[kindname].Functions[possibletest]) {
-						tmp = tmp.concat(me[kindname].Functions[possibletest].getIds());
-						results.index = true;
-						return true;
-					}
-					return false;
-				})) {
-					add = add.concat(tmp);
-				}
-			});
-			add = (results.length > 0 ? intersection(results,add) : add);
-			results.splice.apply(results,[0,results.length].concat(add));
-			return results.length>0;
-		}
-		results.splice(0,results.length);
-		return false;
-	}
 	function Kind() {
 		this.joqularIdMap = new Ids();
 	}
-	Kind.prototype.getValues = function(type) {
+	Kind.prototype.getValues = function(kind) {
 		var me = this;
 		if(!me.joqularValues) {
 			var values = [], keys = Object.keys(me);
 			keys.forEach(function(key) {
-				if(key==="Functions" || key==="joqularIdMap" || key==="joqularId") {
+				if(key==="Functions" || key==="joqularIdMap" || key==="joqularId" || key==="forgeinIds") {
 					return;
 				}
 				var value;
-				switch(type) {
-					case "Boolean": value = (key==="true" ? true : false); break;
-					case "Number": value = parseFloat(key); break;
-					case "String": value = key; break;
-					case "Null": value = null; break;
-				//default: // should throw error
+				switch(kind) {
+					case "Boolean": value = (key==="true" ? true : false); values.push(value); break;
+					case "Number": value = parseFloat(key); values.push(value); break;
+					case "String": value = key; values.push(value); break;
+					case "Null": value = null; values.push(value); break;
+					// index find will assume any other types must be testes during instance match cycle
 				};
-				values.push(value);
 			});
-			if(type==="number") {
+			if(kind==="Number") {
 				values.sort(function(a,b) { return a - b; });
 			} else {
 				values.sort();
@@ -568,152 +508,198 @@
 	}
 	Kind.prototype.getIds = function() {
 		if(!this.joqularIds) {
-			this.joqularIds = Object.keys(this.joqularIdMap);
+			Object.defineProperty(this,"joqularIds",{enumerable:false,configurable:true,writable:true,value:Object.keys(this.joqularIdMap)});
 		}
 		return this.joqularIds;
 	}
-	Kind.prototype.find = function(index,scopes,scopekey,scopekind,value,results) {
-		var me = this, testvalue = value.valueOf(), kindname = value.constructor.name, kindnames, values = {}, pass = [];
-		if(["Boolean","Number","String","Null"].indexOf(kindname)>=0) {
-			if(value.test) {
-				var instancevalues = me.getValues(kindname), instancevalue;
-				switch(value.test) {
-					case "lt":
-						for(var i=0;i<instancevalues.length;i++) {
-						 	instancevalue = new value.constructor(values[i]==="false" ? false : instancevalues[i]).valueOf()
-							if(instancevalue < testvalue) {
-								pass = pass.concat(me[instancevalue].getIds());
-								continue;
-							}
-							break;
-						};
-						break;
-					case "lte":
-						for(var i=0;i<instancevalues.length;i++) {
-						 	instancevalue = new value.constructor(values[i]==="false" ? false : instancevalues[i]).valueOf()
-							if(instancevalue <= testvalue) {
-								pass = pass.concat(me[instancevalue].getIds());
-								continue;
-							}
-							break;
-						};
-						break;
-					case "eq": 
-						var i = instancevalues.bsearch(testvalue)[0];
-						if(i>=0) {
-							pass = pass.concat(me[testvalue].getIds());
-						};
-						break;
-					case "neq":
-						instancevalues.forEach(function(instancevalue) {
-							if(instancevalue !== testvalue) {
-								pass = pass.concat(me[instancevalue].getIds());
-							}
-						});
-						break;
-					case "gte":
-						for(var i=instancevalues.length-1;i>=0;i--) {
-						 	instancevalue = new value.constructor(values[i]==="false" ? false : instancevalues[i]).valueOf()
-							if(instancevalue >= testvalue) {
-								pass = pass.concat(me[instancevalue].getIds());
-								continue;
-							}
-							break;
-						};
-						break;
-					case "gt":
-						for(var i=instancevalues.length-1;i>=0;i--) {
-						 	instancevalue = new value.constructor(values[i]==="false" ? false : instancevalues[i]).valueOf()
-							if(instancevalue > testvalue) {
-								pass = pass.concat(me[instancevalue].getIds());
-								continue;
-							}
-							break;
-						};
-						break;
-				}
-				if(pass.length===0) {
-					results.splice(0,results.length);
-					return false;
-				}
-				results.index = true;
-				var tmp = (results.length>0 ? intersection(results,pass) : pass);
-				results.splice.apply(results,[0,results.length].concat(tmp));
-				return results.length>0;
-			} else if(me[testvalue]) {
-				pass = me[testvalue].getIds();
-				if(pass.length===0) {
-					result.splice(0,results.length);
-					return false;
-				}
-				results.index = true;
-				var tmp = (results.length>0 ? intersection(results,pass) : pass);
-				results.splice.apply(results,[0,results.length].concat(tmp));
-				return results.length>0;
-			}
+	Kind.prototype.find = function(index,value,results,scopes,scopekey,scopekind) {
+		//scopes || (scopes = []);
+		var me = this, testvalue = value.valueOf(), kindname = value.constructor.name, pass = [], instancevalues, instancevalue;
+		if(!me[scopekey]) {
 			results.splice(0,results.length);
-			return results.length>0;
-		} else {
-			var keys = Object.keys(testvalue);
-			scopes = [me].concat(scopes);
-			if(keys.length===0) { // no index matching keys, so return all items that match the scope
-				var tmp = scopes[0].getIds();
-				if(tmp.length===0) {
-					result.splice(0,results.length);
-					return false;
-				}
-				results.index = true;
-				tmp = (results.length > 0 ? intersection(results,tmp) : tmp);
-				results.splice.apply(results,[0,results.length].concat(tmp));
-				return results.length>0;
-			}
-			return keys.every(function(key) {
-				if(me.Functions && me.Functions[key]) { // don't test the functions, just make sure they exist on the objects
-					var tmp = me.Functions[key].getIds();
-					if(tmp.length===0) {
-						result.splice(0,results.length);
-						return false;
-					}
-					results.index = true;
-					var tmp = (results.length > 0 ? intersection(results,tmp) : tmp);
-					results.splice.apply(results,[0,results.length].concat(tmp));
-					return results.length>0;
-				}
-				if(key==="forall") {
-					var ids = (results.length > 0 ? results : index.getIds());
-					if(ids.every(function(id) {
-						return value[key](index.joqularIdMap[id]);
-					})) {
-						results.index = true;
-						if(results.length===0) {
-							results.splice.apply(results,[0,0].concat(ids));
-						}
-						return true;
-					}
-					result.splice(0,results.length);
-					return false;
-				}
-				if(key==="exists") {
-					var ids = (results.length > 0 ? results : index.getIds());
-					if(ids.some(function(id) {
-						return value[key](index.joqularIdMap[id]);
-					})) {
-						results.length = true;
-						if(results.length===0) {
-							results.splice.apply(results,[0,0].concat(ids));
-						}
-						return true;
-					}
-					result.splice(0,results.length);
-					return false;
-				}
-				if(me[key]===undefined) {
-					result.splice(0,results.length);
-					return false;
-				}
-				return me[key].find(index,scopes,key,value.constructor.name,value[key],results);
-			});
+			return false;
 		}
+		if(kindname==="Function") {
+			var kindnames = Object.keys(me[scopekey]);
+			kindnames.forEach(function(kindname) {
+				if(value===FindPattern.prototype.defined) {
+					pass = pass.concat(me[scopekey][kindname].getIds());
+				} else {
+					instancevalues = me[scopekey][kindname].getValues(kindname);
+					if(value.test==="every") {
+						if(["Boolean","Number","String","Null"].indexOf(kindname)===-1) {
+							pass = pass.concat(me[scopekey][kindname].getIds());
+						} else {
+							instancevalues.every(function(instancevalue) {
+								instancevalue = new Object.joqularIndexes[kindname](instancevalue).valueOf();
+								if(value(instancevalue)) {
+									pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
+									return true;
+								}
+								return false;
+							});
+						}
+					} else if(value.test==="some") {
+						if(["Boolean","Number","String","Null"].indexOf(kindname)===-1) {
+							pass = pass.concat(me[scopekey][kindname].getIds());
+						} else {
+							instancevalues.some(function(instancevalue) {
+								instancevalue = new Object.joqularIndexes[kindname](instancevalue).valueOf();
+								if(value(instancevalue)) {
+									pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
+									return true;
+								}
+								return false;
+							});
+						}
+					} else {
+						if(["Boolean","Number","String","Null"].indexOf(kindname)===-1) {
+							pass = pass.concat(me[scopekey][kindname].getIds());
+						} else {
+							instancevalues.forEach(function(instancevalue) {
+								instancevalue = new Object.joqularIndexes[kindname](instancevalue).valueOf();
+								if(value(instancevalue)) {
+									pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
+								}
+							});
+						}
+					}
+				}
+			}); 
+		} else if(["Boolean","Number","String","Null"].indexOf(kindname)>=0) {
+			if(value.test) {
+				if(!me[scopekey][kindname] && value.test==="neq") {
+					var kindnames = Object.keys(me[scopekey]);
+					kindnames.forEach(function(kindname) {
+						pass = pass.concat(me[scopekey][kindname].getIds());
+					});
+				} else if(me[scopekey][kindname]) {
+					instancevalues = me[scopekey][kindname].getValues(kindname);
+					switch(value.test) {
+						// do optimized tests against sorted values from index
+						case "lt":
+							for(var i=0;i<instancevalues.length;i++) {
+							 	instancevalue = new value.constructor(instancevalues[i]==="false" ? false : instancevalues[i]).valueOf()
+								if(instancevalue < testvalue) {
+									pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
+									continue;
+								}
+								break;
+							};
+							break;
+						case "lte":
+							for(var i=0;i<instancevalues.length;i++) {
+							 	instancevalue = new value.constructor(instancevalues[i]==="false" ? false : instancevalues[i]).valueOf()
+								if(instancevalue <= testvalue) {
+									pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
+									continue;
+								}
+								break;
+							};
+							break;
+						case "eq": 
+							var i = instancevalues.bsearch(testvalue)[0];
+							if(i>=0) {
+								pass = pass.concat(me[scopekey][kindname][testvalue].getIds());
+							};
+							break;
+						case "neq":
+							instancevalues.forEach(function(instancevalue) {
+								if(instancevalue !== testvalue) {
+									pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
+								}
+							});
+							break;
+						case "gte":
+							for(var i=instancevalues.length-1;i>=0;i--) {
+							 	instancevalue = new value.constructor(instancevalues[i]==="false" ? false : instancevalues[i]).valueOf()
+								if(instancevalue >= testvalue) {
+									pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
+									continue;
+								}
+								break;
+							};
+							break;
+						case "gt":
+							for(var i=instancevalues.length-1;i>=0;i--) {
+							 	instancevalue = new value.constructor(instancevalues[i]==="false" ? false : instancevalues[i]).valueOf()
+								if(instancevalue > testvalue) {
+									pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
+									continue;
+								}
+								break;
+							};
+							break;
+						// do un-optimized tests
+						default:
+							if(Object.joqularIndexes[kindname] && Object.joqularIndexes[kindname].index.keys[value.test] && Object.joqularIndexes[kindname].index.keys[value.test].Function) {
+								instancevalues.forEach(function(instancevalue) {
+									instancevalue = new Object.joqularIndexes[kindname](instancevalue);
+									if(instancevalue[value.test](value)) {
+										pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
+									}
+								});
+							}
+					}
+				} else { // get the objects that support the type of test requested
+					var kindnames = Object.keys(me[scopekey]);
+					kindnames.forEach(function(kindname) {
+						if(["Boolean","Number","String","Null"].indexOf(kindname)>=0) {
+							return;
+						}
+						if(Object.joqularIndexes[kindname] && Object.joqularIndexes[kindname].index.keys[value.test] && Object.joqularIndexes[kindname].index.keys[value.test].Function) {
+							pass = pass.concat(me[scopekey][kindname].getIds());
+						}
+					});
+				}
+			} else if(me[scopekey] && me[scopekey][kindname] && me[scopekey][kindname][testvalue]) { // test for direct matches
+				pass = me[scopekey][kindname][testvalue].getIds();
+			}
+		// collect everything that supports the test being requested
+		} else if(value.test) {
+			var kindnames = Object.keys(me[scopekey]);
+			kindnames.forEach(function(kindname) {
+				if(Object.joqularIndexes[kindname] && Object.joqularIndexes[kindname].index.keys[value.test] && Object.joqularIndexes[kindname].index.keys[value.test].Function) {
+					pass = pass.concat(me[scopekey][kindname].getIds());
+				}
+			});
+		// walk other object
+		} else if(me[scopekey][kindname] && me[scopekey][kindname].forgeinIds && Object.joqularIndexes[kindname]) {
+			var fids = Object.keys(me[scopekey][kindname].forgeinIds);
+			if(Object.joqularIndexes[kindname].index.find(value,fids)) {
+				fids.forEach(function(fid) {
+					pass.push(me[scopekey][kindname].forgeinIds[fid]);
+				});
+			}
+		// walk keys and sub-objects
+		} else if(kindname==="Pattern") {
+			var keys = Object.keys(value);
+			if(keys.every(function(key) {
+				if(me[key] instanceof Key) {
+					return me.find(index,value[key],pass,scopes,key,value[key].constructor.name);
+				}
+				return true;
+			})) {
+				// look in child objects in case key was not present
+				var kindnames = Object.keys(me[scopekey]);
+				kindnames.forEach(function(kindname) {
+					if(me[scopekey][kindname].forgeinIds && Object.joqularIndexes[kindname]) {
+						var fids = Object.keys(me[scopekey][kindname].forgeinIds);
+						if(Object.joqularIndexes[kindname].index.find(value,fids)) {
+							pass = pass.concat(me[scopekey][kindname].getIds());
+						}
+					}
+				});
+			}
+		}
+		if(pass.length===0) {
+			results.splice(0,results.length);
+			return false;
+		}
+		results.index = true;
+		var tmp = (results.length>0 ? intersection(results,pass) : pass);
+		results.splice.apply(results,[0,results.length].concat(tmp));
+		return results.length>0;
 	}
 	function Value() {
 		this.joqularIdMap = new Ids();
@@ -733,85 +719,17 @@
 		}
 		return this.joqularIds;
 	}
+	function Pattern(init) {
+		for(var key in init) {
+			this[key] = init[key];
+		}
+	}
 	function FindPattern(pattern,aliases) {
 		this.compile(pattern,aliases);
 	}
-	FindPattern.prototype.defined = function(index,scopes,scopekey,scopekind,results) {
-		if(scopes[0][scopekey]!==undefined) {
-		// optimize ids just like values!
-			var kindnames = Object.keys(scopes[0][scopekey]), tmp = [];
-			kindnames.forEach(function(kindname) {
-				tmp = tmp.concat(scopes[0][scopekey][kindname].getIds());
-			});
-			if(tmp.length===0) {
-				results.splice(0,results.length);
-				return false;
-			}
-			results.index = true;
-			var tmp = (results.length > 0 ? intersection(results,tmp) : tmp);
-			results.splice.apply(results,[0,results.length].concat(tmp));
-			return results.length>0;
-		}
-		results.splice(0,results.length);
-		return false;
-	}
-	FindPattern.prototype.$ = function(f,index,scopes,scopekey,scopekind,results) {
-		var scope = scopes[0], pass = [];
-		var kindnames = Object.keys(scope[scopekey]);
-		kindnames.forEach(function(kindname) {
-			var values = scope[scopekey][kindname].getValues(kindname);
-			values.forEach(function(value) {
-				if(f(value)) {
-					pass = pass.concat(scope[scopekey][kindname][value].getIds());
-				}
-			})
-		});
-		if(pass.length===0) {
-			results.splice(0,results.length);
-			return false;
-		}
-		results.index = true;
-		var tmp = (results.length>0 ? intersection(results,pass) : pass);
-		results.splice.apply(results,[0,results.length].concat(tmp));
-		return results.length>0;
-	}
-	FindPattern.prototype.$every = function(f,index,scopes,scopekey,scopekind,results) {
-		var scope = scopes[0], ids = scope.joqularId.Number.getIds(), pass = [];
-		if(ids.every(function(id) {
-			return isNaN(parseInt(id)) || Object.joqularIndexes[scopekind].index.joqularIdMap[id][scopekey].every(f);
-		})) {
-			ids.forEach(function(id) {
-				if(isNaN(parseInt(id))) return;
-				pass = pass.concat(scope.joqularId.Number[id].getIds());
-			});
-		}
-		if(pass.length===0) {
-			results.splice(0,results.length);
-			return false;
-		}
-		results.index = true;
-		var tmp = (results.length>0 ? intersection(results,pass) : pass);
-		results.splice.apply(results,[0,results.length].concat(tmp));
-		return results.length>0;
-	}
-	FindPattern.prototype.$some = function(f,index,scopes,scopekey,scopekind,results) {
-		var scope = scopes[0], ids =  scope.joqularId.Number.getIds(), pass = [];
-		if(ids.some(function(id) {
-			return isNaN(parseInt(id)) || Object.joqularIndexes[scopekind].index.joqularIdMap[id][scopekey].some(f);
-		})) {
-			ids.forEach(function(id) {
-				if(isNaN(parseInt(id))) return;
-				pass = pass.concat(scope.joqularId.Number[id].getIds());
-			});
-		}
-		if(pass.length===0) {
-			results.splice(0,results.length);
-			return false;
-		}
-		results.index = true;
-		var tmp = (results.length>0 ? intersection(results,pass) : pass);
-		results.splice.apply(results,[0,results.length].concat(tmp));
-		return results.length>0;
+	FindPattern.prototype = new Pattern();
+	FindPattern.prototype.defined = function(value) {
+		return value!==undefined
 	}
 	FindPattern.prototype.compile = function(pattern,aliases,scope) {
 		scope || (scope = this);
@@ -820,45 +738,42 @@
 			if(key==="$forall" || key==="$exists") {
 				return; // should only exist at top level, perhaps alias with every and exists and ih=gnore at top level?
 			}
-			if(key==="$$") {
+			if(key.indexOf("$$")===0) {
 				return;
 			}
 			var value = (pattern[key]!=null ? pattern[key].valueOf() : pattern[key]), type = typeof(value); // converts pseudo primitive like Time, Duration to the primitive
 			value = (value instanceof Date ? value.getTime() : value); // convert dates to numbers
 			value = toObject(value);
-			if(key.indexOf("$")===0 && key.length>1) {
-				key = key.substring(1);
-			}
 			if(value.valueOf()!=null && type==="object") {
-				var possibletest = Object.keys(value)[0];
-				if(possibletest && (["$$"].indexOf(possibletest)>=0 || possibletest.indexOf("/")===0 || possibletest.indexOf(".")===0)) {
-					value = me.defined;
-					scope[key] = value; // just ensure key defined, leave resolution until final match, i.e. don't do in the index find, do against preliminary results 
-				} else if(["$lt","$lte","$eq","$neq","$gte","$gt"].indexOf(possibletest)>=0) {
-					value = toObject(value[possibletest]);
-					Object.defineProperty(value,"test",{enumerable:false,configurable:true,writable:true,value:possibletest.substring(1)});
-					if(["Boolean","Number","String","Null"].indexOf(value.constructor.name)>=0) {
-						scope[key] = value;
-					} else {
-						value = me.defined;
-						scope[key] = value;// just ensure key defined, leave resolution until final match, i.e. don't do in the index find, do against preliminary results
-					}
-				} else if(value instanceof Date) {
-					scope[key] = value; // need to work on this;
-				} else if(value instanceof Array || Object.keys(value).length===0) { // handle keyless objects like Sets
-					value = me.defined;
-					scope[key] = value; // handle outside of index
-				} else if(typeof(me[possibletest])==="function") {
-					var f = value[possibletest];
-					value = function(index,scope,scopekey,scopekind,results) {
-						return me[possibletest](f,index,scope,scopekey,scopekind,results);
-					}
+				if(value instanceof Array) {
 					scope[key] = value;
 				} else {
-					scope[key] = {};
-					me.compile(value,aliases,scope[key]);
+					var possibletest = Object.keys(value)[0];
+					if(possibletest && (["$$"].indexOf(possibletest)>=0 || possibletest.indexOf("/")===0 || possibletest.indexOf(".")===0)) {
+						value = me.defined;
+						scope[key] = value; // just ensure key defined, leave resolution until final match, i.e. don't do in the index find, do against preliminary results 
+					} else if(possibletest.indexOf("$")===0) {
+						value = toObject(value[possibletest]);
+						Object.defineProperty(value,"test",{enumerable:false,configurable:true,writable:true,value:possibletest.substring(1)});
+						scope[key] = value;
+					} else if(value instanceof Date) {
+						scope[key] = value; // need to work on this;
+					} else if(Object.keys(value).length===0) { // handle keyless objects like Sets
+						value = me.defined;
+						scope[key] = value; // handle outside of index
+					} else if(typeof(me[possibletest])==="function") {
+						var f = value[possibletest];
+						value = function() {
+							return me[possibletest](f,index,results,scope,scopekey,scopekind);
+						}
+						scope[key] = value;
+					} else {
+						scope[key] = new Pattern();
+						me.compile(value,aliases,scope[key]);
+					}
 				}
 			} else {
+				Object.defineProperty(value,"test",{enumerable:false,configurable:true,writable:true,value:"eq"});
 				scope[key] = value;
 			}
 		});
@@ -866,6 +781,7 @@
 	function MatchPattern(pattern,literals,aliases) {
 		this.compile(pattern,literals,aliases);
 	}
+	MatchPattern.prototype = new Pattern();
 	MatchPattern.prototype.compile = function(pattern,literals,aliases,scope) {
 		scope || (scope = this);
 		var me = this, keys = Object.keys(pattern), isfunction = false;
@@ -884,11 +800,13 @@
 				var possibletest = Object.keys(value)[0];
 				if(value[possibletest] && typeof(value[possibletest])==="object" && aliases) {
 					var possiblealias = Object.keys(value[possibletest])[0];
-					if(aliases[possiblealias] || (aliases.indexOf && aliases.indexOf(possiblealias)>=0)) {
+					// arrays can't be tests and may actually exist to contain function arguments
+					if(!(value[possibletest] instanceof Array) && aliases[possiblealias] || (aliases.indexOf && aliases.indexOf(possiblealias)>=0)) {
 						return;
 					}
 				}
 				if(["$lt","$lte","$eq","$neq","$gte","$gt"].indexOf(possibletest)>=0) {
+					// ignore tests on primtives which were handled by index
 					if(["Boolean","Number","String","Null"].indexOf(value.constructor.name)===-1) {
 						var v = {};
 						v[possibletest.substring(1)] = value[possibletest];
@@ -917,15 +835,17 @@
 		}
 		return this.joqularIds;
 	}
-	Index.prototype.index = function(instance,kind,id) {
-		var me = this, value, type, kindname;
-		id!=null || (id = me.nextId++);
-		if(!kind) {
+	Index.prototype.index = function(instance) {
+		var me = this, id, kind = me.keys, value, type, kindname = instance.constructor.name;
+		if(["Boolean","Number","String","Null"].indexOf(kindname)===-1) {
+			if(instance.joqularId==null) {
+				id = me.nextId++;
+				instance.joqularId = id;
+			} else {
+				id = instance.joqularId;
+			}
 			me.joqularIdMap[id] = instance;
-			instance.joqularId = id;
-			//Object.defineProperty(instance,"joqularId",{enumerable:false,configurable:false,writable:false,value:id});
 		}
-		kind || (kind = me.keys);
 		for(var key in instance) {
 			if(typeof(instance.valueOf())==="string" && typeof(instance[key])==="string") continue; // skip indexing strings by char
 			value = (instance[key]!=null ? instance[key].valueOf() : instance[key]); // converts pseudo primitive like Time to the primitive
@@ -934,38 +854,50 @@
 			if(value===undefined) continue;
 			kindname = value.constructor.name, type = typeof(value.valueOf());
 			if(instance[key]===null) type = "undefined";
-			if(!Object.joqularIndexes[kindname]) {
-				value.constructor.index = new Index(kindname);
-				Object.joqularIndexes[kindname] = value.constructor;
-				value.constructor.index.index(value);
-			}
-			if(kindname==="Function") {
-				kind.Functions || (kind.Functions = {});
-				kind.Functions[key] instanceof Method || (kind.Functions[key] = new Method());
-				kind.Functions[key].joqularIdMap[id] = 1;
-			} else {
-				kind[key] || (kind[key] = new Key());
-				kind[key][kindname] || (kind[key][kindname] = new Kind());
+			// Object.joqularIndexes[kindname] || JOQULAR.createIndex(value.constructor);
+			Object.joqularIndexes[kindname] || (Object.joqularIndexes[kindname] = value.constructor);
+			Object.joqularIndexes[kindname].index || (Object.joqularIndexes[kindname].index = new Index(kindname));
+			kind[key] || (kind[key] = new Key());
+			kind[key][kindname] || (kind[key][kindname] = new Kind());
+			if(id!=null) {
 				kind[key][kindname].joqularIdMap[id] = 1;
-				if(["Boolean","Number","String","Null"].indexOf(kindname)>=0) {
-					kind[key][kindname][value.valueOf()] || (kind[key][kindname][value.valueOf()] = new Value());
-					kind[key][kindname][value.valueOf()].joqularIdMap[id] = 1;
-					// need to add some special stuff to enable restore of Dates, Durations, Times that have been convereted to primitives
-					// if(value.valueOf()!==instance[key] || instance[key] instanceof Date) ...
+			}
+			if(["Boolean","Number","String","Null"].indexOf(kindname)>=0) {
+				kind[key][kindname][value.valueOf()] || (kind[key][kindname][value.valueOf()] = new Value());
+				kind[key][kindname][value.valueOf()].joqularIdMap[id] = 1;
+				Object.joqularIndexes[kindname].index.index(value);
+				// need to add some special stuff to enable restore of Dates, Durations, Times that have been convereted to primitives
+				// if(value.valueOf()!==instance[key] || instance[key] instanceof Date) ...
+			} else if(kindname!==me.kindName || value.joqularId!==id){
+				if(value.joqularId==null) {
+					Object.joqularIndexes[kindname].index.index(value);
 				}
-				me.index(value,kind[key][kindname],id);
+				kind[key][kindname].forgeinIds || (kind[key][kindname].forgeinIds = {});
+				kind[key][kindname].forgeinIds[value.joqularId] = id; // how do we keep this updated for deletes?
 			}
 		}
+		if(instance instanceof Array) {
+			kind.length!=null || (kind.length = new Key());
+			kind.length.Number || (kind.length.Number = new Kind());
+			kind.length.Number[instance.length] || (kind.length.Number[instance.length] = new Value());
+			kind.length.Number[instance.length].joqularIdMap[id] = 1;
+			kind.length.Number.joqularIdMap[id] = 1;
+		}
+//		if(instance instanceof Function) {
+//			kind.name!=null || (kind.name = new Key());
+//			kind.name.String || (kind.name.String = new Kind());
+//			kind.name.String[instance.name] || (kind.name.String[instance.name] = new Value());
+//			kind.name.String[instance.name].joqularIdMap[id] = 1;
+//			kind.name.String.joqularIdMap[id] = 1;
+//		}
 	}
 	Index.prototype.find = function(pattern,aliases) {
-		var me = this, findpattern = new FindPattern(pattern,aliases), matchpattern = new MatchPattern(pattern,false,aliases), keys = Object.keys(findpattern), found = [], results = [];
+		var me = this, findpattern = (pattern instanceof Pattern ? pattern : new FindPattern(pattern,aliases)), 
+		matchpattern = (pattern instanceof Pattern ? pattern : new MatchPattern(pattern,false,aliases)),
+		keys = Object.keys(findpattern), found = [], results = [];
 		if(keys.every(function(key) {
-			if(!me.keys[key]) return false;
-			return me.keys[key].find(me,[me.keys],key,me.kindName,toObject(findpattern[key]),found);
+			return me.keys.find(me,findpattern[key],found,[me.keys],key,findpattern[key].constructor.name);
 		})) {
-			if(keys.length===0) {
-				found = me.getIds();
-			}
 			if(pattern.$forall && !found.every(pattern.$forall)) {
 				return [];
 			}
@@ -981,22 +913,6 @@
 			results.index = found.index;
 		}
 		return results;
-	}
-	function joqularValues(scope,type) {
-		if(!scope || !scope[type]) {
-			return [];
-		}
-		if(!scope[type].joqularValues) {
-			var values = Object.keys(scope[type]);
-			switch(type) {
-			case "number": values.forEach(function(value,i) { if(value!=="joqularValues") { values[i] = parseFloat(value); }}); values.sort(function(a,b) { return a - b; }); break;
-			case "boolean": values.forEach(function(value,i) { if(value!=="joqularValues") { values[i] = (value==="true"); }}); values.sort(); break;
-			case "string": values.sort(); break;
-			case "undefined": values = [null]; break;
-			}
-			Object.defineProperty(scope[type],"joqularValues",{enumerable:false,configurable:true,writable:true,value:values});
-		}
-		return scope[type].joqularValues;
 	}
 	function joqularIndexValue(id,value,index,key,type) {
 		index[key] || (index[key] = {});
@@ -1018,7 +934,7 @@
 			var key = change.name, value = change.object[key];
 			if(change.type==="update" || change.type==="delete") {
 				var type = typeof(change.oldValue);
-				if(change.oldValue instanceof Object) {
+				if(change.oldValue!==null && type==="object") {
 					joqularDelete.call(constructor,id,change.oldValue,index[key]);
 				} else if(index[key][type][change.oldValue]) {
 					delete index[key][type][change.oldValue][id];
@@ -1049,7 +965,7 @@
 			keys.forEach(function(key) {
 				if(index[key]) {
 					var value = instance[key], type = typeof(value);
-					if(value instanceof Object) {
+					if(value!==null && type==="object") {
 						joqularDelete.call(constructor,value,index[key]);
 					} else if(index[key][type] && index[key][type][value]){
 						delete index[key][type][value][id];
@@ -1058,10 +974,10 @@
 			});
 		}
 	}
-	function Pattern(pattern) {
+	function QueryPattern(pattern) {
 		this.value = pattern;
 	}
-	Pattern.prototype.toJSON = function() {
+	QueryPattern.prototype.toJSON = function() {
 		return this.value;
 	}
 	function Statement(projection) {
@@ -1265,14 +1181,25 @@
 				if(me.projection) {
 					rows.forEach(function(row,i) {
 						var projection = {}, columns = Object.keys(me.projection);
+						var aliasnames = Object.keys(me.aliases);
 						columns.forEach(function(column) {
-							var reference = me.projection[column], aliasname = Object.keys(reference)[0], path = reference[aliasname].split(".");
-							var value = row[aliasname];
-							for(var i=0;i<path.length;i++) {
-								value = value[path[i]];
-								if(value===undefined) return;
-							}
-							projection[column] = value;
+							var reference = me.projection[column];
+							aliasnames.some(function(aliasname) {
+								if(reference[aliasname]) {
+									var path = reference[aliasname].split(".");
+									var value = row[aliasname];
+									for(var i=0;i<path.length;i++) {
+										value = value[path[i]];
+										if(value===undefined) return;
+									}
+									if(JOQULAR.format && reference.format) {
+										value = JOQULAR.format(refercen.format,value);
+									}
+									projection[column] = value;
+									return true;
+								}
+								return false;
+							});
 						});
 						rows[i] = [projection];
 					});
@@ -1361,10 +1288,10 @@
 		var aliases = Object.keys(me.aliases), patternaliases = Object.keys(patterns);
 		patternaliases.forEach(function(alias) {
 			if(aliases.indexOf(alias)>=0) {
-				me.patterns[alias] = new Pattern(patterns[alias]);
+				me.patterns[alias] = new QueryPattern(patterns[alias]);
 				return true;
 			}
-			throw new Error("The top level pattern " + JSON.stringify(new Pattern(patterns[alias])) + " does not refer to a class");
+			throw new Error("The top level pattern " + JSON.stringify(new QueryPattern(patterns[alias])) + " does not refer to a class");
 		});
 		return me;
 	}
