@@ -22,15 +22,23 @@ npm install joqular
 
 // everyone named Joe
 
-{name: {eq: 'Joe'}} 
+{name: {$eq: 'Joe'}} 
+
+// everyone born in January
+
+{birthday: {month: 1}}
+
+// events longer than 1 hour
+
+{event: {hours: {$gt: 1}}}
 
 // all adult women
 
-{age: {gte: 18}, gender: 'female'}} 
+{age: {$gte: 18}, gender: 'female'}} 
 
 // adult women Bainbridge Island and downtown Seattle
 
-{age: {gte: 18}, gender: 'female', address: {zipcode: {in: [98110,98101]}}}} 
+{age: {$gte: 18}, gender: 'female', address: {zipcode: {$in: [98110,98101]}}}} 
 
 // all grandsons named the same as their grandfather
 
@@ -42,31 +50,31 @@ npm install joqular
 
 // all partners who are not partnered with the same gender
 
-{partner1: {gender: {neq: {'..partner2': 'gender'}}}} 
+{partner1: {gender: {$neq: {'..partner2': 'gender'}}}} 
 
 // Joe's children, if any are sick
 
-{name: 'Joe', {children: {some: function(child) { return child.isSick; }}}} 
+{name: 'Joe', {children: {$some: function(child) { return child.isSick; }}}} 
 
 // Joe's children, if all are sick
 
-{name: 'Joe', {children: {every: function(child) { return child.isSick; }}}} 
+{name: 'Joe', {children: {$every: function(child) { return child.isSick; }}}} 
 
 // [], unless all females are named Jo
 
-{gender: 'female', {forall: function(object) { return object.name==='Jo'; }}} 
+{gender: 'female', {$forall: function(object) { return object.name==='Jo'; }}} 
 
 // all females if any are named Jo
 
-{gender: 'female', {exists: function(object) { return object.name==='Jo'; }}} 
+{gender: 'female', {$exists: function(object) { return object.name==='Jo'; }}} 
 
 // anyone named Joe or Jo
 
-{name: {soundex: 'Joe'}} 
+{name: {$soundex: 'Joe'}} 
 
 // anyone with a name starting in Jo
 
-{name: {match: /Jo*/}}
+{name: {$match: /Jo*/}}
 
 // anyone who is female and authorized based on the value, i.e. 21 or over 
 
@@ -88,7 +96,7 @@ select().from({p1: Person}).orderBy({'p1.address.zipcode': 'asc', 'p1.name':'asc
 
  // all combinations of people
  
-select().from({p1: Person,p2: Person}).where({p2: {neq: p1}});
+select().from({p1: Person,p2: Person}).where({p2: {$neq: p1}});
 
 // first 10 Person's matching a query
 
@@ -104,7 +112,7 @@ select().sample(.95,.03).from({p1: Person});
 
 # updates
 
-2015-06-01 v1.02.01 Added SQL like Insert, Update, Delete. Further optimized indexing and search. Formatting capability added for POJO projections using Select. Two "breaking" changes. Index format changed in a manner that is not compatible with current persisted indexes. No automated migration currently available. Modified syntax to require a $ sign before any function references in patterns and queries in order to provide hints to query optimizer. Simple global replace on an existing function references to address the change.
+2015-06-01 v1.02.01 Added SQL like Insert, Update, Delete. Further optimized indexing and search. Formatting capability added for POJO projections using Select. Dates fully indexed by year, month, dayofMonth, hours, seconds, milliseconds. Durations fully indexed by years, months, weeks, days,  hours, minutes, seconds, milliseconds. Added weeks (W) to Duration. Three "breaking" changes. 1) Index format changed in a manner that is not compatible with current persisted indexes. No automated migration currently available. 2) Modified syntax to require a $ sign before any function references in patterns and queries in order to provide hints to query optimizer. Simple global replace on an existing function references to address the change. 3) Modified Date, Time, Duration match behavior such they they will no longer match just a number. Dates must be matched using the entire object or their subfields, 'year', 'month', 'dayofMonth', 'hours', 'minutes', 'seconds', 'milliseconds'. Times must be matched using the entire object or their subfield 'milliseconds'. Durations must be matched using the entire object or their subfields 'length' (which is expressed in milliseconds), 'years', 'months', 'weeks', 'days', 'hours', 'seconds', 'milliseconds'. The function 'valueOf()' continues to return a number of milliseconds for all these objects. 
 
 2015-05-11 v1.01.02 Extended ability to reference data across patterns when using providers. Reversed ordering of update info and reformatted examples in README. (1,193 Unit tests and growing ...)
 

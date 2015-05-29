@@ -23,9 +23,10 @@ Entity = JOQULAR.enhance(Entity, {
     datastore:{name:"JOQULARExample",type:"IndexedDB", format:"pseudo-blob"}});
 
 // define business model classes
-function Person(name,age) {
+function Person(name,age,employmentDate) {
     this.name = name;
     this.age = age;
+    this.employmentDate = employmentDate;
 }
 Person.prototype = new Entity();
 
@@ -33,17 +34,20 @@ Person.prototype = new Entity();
 Person = JOQULAR.createIndex(Person,true);
 
 // create a couple of people
-var p1 = new Person('Joe',24);
-var p2 = new Person('Mary',18);
+var p1 = new Person('Joe',24,new Date(2014,1,1));
+var p2 = new Person('Mary',18,new Date(2014,11,1));
 
 // match them
 console.log("Matched: " + JSON.stringify(p1.joqularMatch({age: 24}))); // prints  {name: "Joe", age: 24}
 console.log("Matched: " + JSON.stringify(p1.joqularMatch({age: {neq: 18}}))); //  {name: "Joe", age: 24}
 console.log("Matched: " + p1.joqularMatch({age: {eq: 18}})); // prints null
 
+
 // find them
-console.log("Found: " + JSON.stringify(Person.joqularFind({age: 24}))); // prints [{name: 'Joe', age: 24}]
-console.log("Found: " + JSON.stringify(Person.joqularFind({age: {gt: 16}}))); // prints [{name: 'Joe', age: 24},{name: 'Mary', age: 18}]
+console.log("Found: " + JSON.stringify(Person.joqularFind({age: 24}))); // prints [{"name":"Joe","age":24,"employmentDate":"2014-02-01T08:00:00.000Z","joqularId":0}]
+console.log("Found: " + JSON.stringify(Person.joqularFind({age: {$gt: 16}}))); // prints[{"name":"Joe","age":24,"employmentDate":"2014-02-01T08:00:00.000Z","joqularId":0},{"name":"Mary","age":18,"employmentDate":"2014-12-01T08:00:00.000Z","joqularId":1}]
+console.log("Found: " + JSON.stringify(Person.joqularFind({employmentDate: {year: 2014}}))); // prints [{"name":"Joe","age":24,"employmentDate":"2014-02-01T08:00:00.000Z","joqularId":0},{"name":"Mary","age":18,"employmentDate":"2014-12-01T08:00:00.000Z","joqularId":1}]
+console.log("Found: " + JSON.stringify(Person.joqularFind({employmentDate: {month: {$gt: 6}}}))); // prints [{"name":"Mary","age":18,"employmentDate":"2014-12-01T08:00:00.000Z","joqularId":1}]
 
 // save them,
 Person.joqularSave().then(function(saved) {

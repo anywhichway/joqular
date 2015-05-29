@@ -1,6 +1,5 @@
 <html>
 <head>
-<script src="http://cdn.polyfill.io/v1/polyfill.min.js"></script>
 <script src="object-observe.js" type="text/javascript"></script>
 <script src="es6-promise.min.js" type="text/javascript"></script>
 <script src="es6-collections.min.js" type="text/javascript"></script>
@@ -62,6 +61,7 @@ var to = {
 	aTimeMillisecond: new JOQULAR.Time(new Date(2014,1,15,12,30,30,500)).withPrecision("ms"),
 	aYear: new JOQULAR.Duration(1,"Y"),
 	aMonth: new JOQULAR.Duration(1,"M"),
+	aWeek: new JOQULAR.Duration(1,"W"),
 	aDay: new JOQULAR.Duration(1,"D"),
 	anHour: new JOQULAR.Duration(1,"h"),
 	aMinute: new JOQULAR.Duration(1,"m"),
@@ -168,7 +168,11 @@ var positivetests = [
 	{aSet1: {$coincident: {'..': 'anArray1'}}},
 	{aSet1: {$intersects: {'..': 'anArray1'}}},
 	{aSet1: {$disjoint: {'..': 'anArray2'}}},
-	{aDate1: new Date(2014,0,15,12,30,30,500)},
+	{aDate1: {time: new Date(2014,0,15,12,30,30,500).getTime()}},
+	{aDate1: {year: 2014, month:1, dayOfMonth:15, hours:12, minutes:30, seconds:30, milliseconds:500}},
+	{aDate1: {dayOfMonth: {$lt: {'/aDate3': 'dayOfMonth'}}}},
+	{aDate1: {dayOfMonth: {$lt: {'..aDate3': 'dayOfMonth'}}}},
+	{aDate1: {dayOfMonth: 15}},
 	{aDate1: {$lt: new Date(2015,0,15,12,30,30,500)}},
 	{aDate1: {$lte: new Date(2014,0,15,12,30,30,500)}},
 	{aDate1: {$eq: new Date(2014,0,15,12,30,30,500)}},
@@ -195,19 +199,39 @@ var positivetests = [
 	{aTimeSecond: new JOQULAR.Time(new Date(2014,1,15,12,30,30,500)).withPrecision("s")},
 	{aTimeMillisecond: new JOQULAR.Time(new Date(2014,1,15,12,30,30,500)).withPrecision("ms")},
 	{aTimeYear: {$eq: {'..': 'aTimeYear'}}},
-	{aTimeYear: {$lt: {'..': 'aTimeMonth'}}},
+	//{aTimeYear: {milliseconds: {$eq: {'.': 'milliseconds'}}}},
+	{aTimeYear: {milliseconds: {$lt: {'/aTimeMonth': 'milliseconds'}}}},
 	{aTimeMonth: {$lt: {'..': 'aTimeDay'}}},
 	{aTimeDay: {$lt: {'..': 'aTimeHour'}}},
 	{aTimeHour: {$lt: {'..': 'aTimeMinute'}}},
 	{aTimeMinute: {$lt: {'..': 'aTimeSecond'}}},
 	{aTimeSecond: {$lt: {'..': 'aTimeMillisecond'}}},
-	{aYear: {$eq: 31557600*1000}}, 
-	{aMonth: (31557600*1000)/12}, // a psuedo month
-	{aDay: 24*60*60*1000},
-	{anHour: 60*60*1000},
-	{aMinute: 60*1000},
-	{aSecond: 1000},
-	{aMillisecond: 1},
+	{aYear: {length: {$eq: 31557600*1000}}}, 
+	{aMonth: {length: (31557600*1000)/12}}, // a psuedo month
+	{aDay: {length: 24*60*60*1000}},
+	{anHour: {length: 60*60*1000}},
+	{aMinute: {length: 60*1000}},
+	{aSecond: {length: 1000}},
+	{aMillisecond: {length: 1}},
+	{aYear: {years: 1}},
+	{aMonth: {months: 1}},
+	{aMonth: {years: {$lt: 1}}},
+	{aWeek: {weeks: 1}},
+	{aWeek: {months: {$lt: 1}}},
+	{aDay: {days: 1}},
+	{aDay: {months: {$lt: 1}}},
+	{anHour: {hours: 1}},
+	{anHour: {minutes: 60}},
+	{anHour: {days: {$lt: 1}}},
+	{aMinute: {minutes: 1}},
+	{aMinute: {hours: {$lt: 1}}},
+	{aMinute: {seconds: 60}},
+	{aSecond: {seconds: 1}},
+	{aSecond: {minutes: {$lt: 1}}},
+	{aSecond: {milliseconds: 1000}},
+	{aMillisecond: {milliseconds: 1}},
+	{aMillisecond: {seconds: {$lt: 1}}},
+	{aMillisecond: {milliseconds: 1}},
 	{aYear: {$lt: [new JOQULAR.Duration(2,"Y"),"Y"]}},
 	{aYear: {$lte: [new JOQULAR.Duration(1,"Y"),"Y"]}},
 	{aYear: {$eq: [new JOQULAR.Duration(1,"Y"),"Y"]}},
@@ -243,11 +267,13 @@ var positivetests = [
 	{anHour: {$gte: [new JOQULAR.Duration(1,"h"),"h"]}},
 	{anHour: {$gt: [new JOQULAR.Duration(59,"m"),"h"]}},
 	//aTimeSpan1 =  new JOQULAR.TimeSpan(new Date(2013,1,15,12,30,30,500),new Date(2015,1,15,12,30,30,500))
+	{aTimeSpan1: {starts: new Date(2013,1,15,12,30,30,500).valueOf(), ends: new Date(2015,1,15,12,30,30,500).valueOf()}},
+	{aTimeSpan1: {$coincident: {'..': 'aTimeSpan1'}}},
 	{aTimeSpan1: {$intersects: {'..': 'aTimeSpan2'}}},
 	{aTimeSpan1: {$intersects: {'..': 'aTimeSpan3'}}},
 	{aTimeSpan1: {$contains: {'..': 'aTimeSpan4'}}},
-	//{aTimeSpan2: {endingTime: Infinity}}, // no longer work due to new index structure
-	//{aTimeSpan3: {startingTime: -Infinity}},
+	{aTimeSpan2: {ends: Infinity}},
+	{aTimeSpan3: {starts: -Infinity}},
 	{aTimeSpan1: {$before: new Date(2016,1,15,12,30,30,500)}},
 	{aTimeSpan1: {$adjacentOrBefore: [new Date(2016,1,15,12,30,30,500),"Y"]}},
 	{aTimeSpan1: {$adjacentBefore: [new Date(2016,1,15,12,30,30,500),"Y"]}},
@@ -337,6 +363,8 @@ var negativetests = [
 	{aSet1: {$coincident: {'..': 'anArray2'}}},
 	{aSet1: {$intersects: {'..': 'anArray2'}}},
 	{aSet1: {$disjoint: {'..': 'anArray1'}}},
+	{aDate1: {year:2016}},
+	{aDate1: {dayOfMonth: {$gt: {'/aDate3': 'dayOfMonth'}}}},
 	{aDate1: {$lt: new Date(2013,0,15,12,30,30,500)}},
 	{aDate1: {$lte: new Date(2013,0,15,12,30,30,500)}},
 	{aDate1: {$eq: new Date(2013,0,15,12,30,30,500)}},
@@ -369,13 +397,13 @@ var negativetests = [
 	{aTimeHour: {$gt: {'..': 'aTimeMinute'}}},
 	{aTimeMinute: {$gt: {'..': 'aTimeSecond'}}},
 	{aTimeSecond: {$gt: {'..': 'aTimeMillisecond'}}},
-	{aYear: {$neq: Math.floor(365.25*24*60*60*1000)}}, 
-	{aMonth: Math.floor(365.25/12*24*60*60*2000)}, // a psuedo month
-	{aDay: 24*60*60*2000},
-	{anHour: 60*60*2000},
-	{aMinute: 60*2000},
-	{aSecond: 2000},
-	{aMillisecond: 2},
+	{aYear: {length: {$neq: Math.floor(365.25*24*60*60*1000)}}}, 
+	{aMonth: {length: Math.floor(365.25/12*24*60*60*2000)}}, // a psuedo month
+	{aDay: {length: 24*60*60*2000}},
+	{anHour: {length: 60*60*2000}},
+	{aMinute: {length: 60*2000}},
+	{aSecond: {length: 2000}},
+	{aMillisecond: {length: 2}},
 	{aYear: {$gt: [new JOQULAR.Duration(2,"Y"),"Y"]}},
 	{aYear: {$neq: [new JOQULAR.Duration(1,"Y"),"Y"]}},
 	{aYear: {$neq: [new JOQULAR.Duration(1,"Y"),"M"]}},
@@ -410,8 +438,8 @@ var negativetests = [
 	{aTimeSpan1: {$disjoint: {'..': 'aTimeSpan2'}}},
 	{aTimeSpan1: {$disjoint: {'..': 'aTimeSpan3'}}},
 	{aTimeSpan1: {$disjoint: {'..': 'aTimeSpan4'}}},
-	//{aTimeSpan2: {endingTime: -Infinity}},
-	//{aTimeSpan3: {startingTime: Infinity}},
+	{aTimeSpan2: {ends: -Infinity}},
+	{aTimeSpan3: {starts: Infinity}},
 	//{aString: "astring", $exists: function(object) { return  object.__proto__===null; }},
 	//{aString: "astring", $forall: function(object) { return  object.__proto__===null; }},
 ];
@@ -567,7 +595,9 @@ var querytests = [
 	[JOQULAR.select().from({p1: Person}).where({p1: {name: 'Bill', age: {$outside:[18,20]}}}),1],
 	[JOQULAR.select().from({p1: Person, p2: Person}).where({p2: {faith: {$eq: {p1: 'faith'}}, gender: {$neq: {p1: 'gender'}}}}),2],
 	[JOQULAR.select({firstName: {p1: 'name'}}).from({p1: Person}).where({p1: {name: 'Bill'}}),function(results) { return results.length===1 && results[0][0].firstName==='Bill'}],
-	[JOQULAR.select({zipcode: {p1: 'address.zipcode'}}).from({p1: Person}).where({p1: {address: {zipcode: 98110}}}),function(results) { return results.length===50 && results[0][0].zipcode===98110}]
+	[JOQULAR.select({zipcode: {p1: 'address.zipcode'}}).from({p1: Person}).where({p1: {address: {zipcode: 98110}}}),function(results) { return results.length===50 && results[0][0].zipcode===98110}],
+	[JOQULAR.select().from({p1: Person, p2: Person}),10404],
+	[JOQULAR.select().from({p1: Person, p2: Person}).where({p1: {name: {$eq: {p2: 'name'}}}}),102],
 ];
 querytests.run = [];
 
@@ -576,7 +606,7 @@ querytests.forEach(function(test,i) {
 		var query = test[0];
 		var expected = test[1];
 		var result = query.exec();
-		if((typeof(expected)==="number" && result.length===expected) || expected(result)) {
+		if((typeof(expected)==="number" && result.length===expected) || (typeof(expected)==="function" && expected(result))) {
 			passed++;
 			if(LOGSUCCESS) console.log("Passed Query Test: " + i + " " + JSON.stringify(query));
 		} else {
@@ -675,9 +705,9 @@ console.log(JOQULAR.insert().into(Person).object([{name:'Tyler',age:22}]).exec()
 
 // create a non-enumerable sub object with all the joqular functions on it!! push index down also??
 console.log(Person.index.joqularIdMap[1]);
-Person.joqularFlush(1);
+Person.index.flush(1);
 console.log(Person.index.joqularIdMap[1]);
-console.log(Person.joqularRestore(1));
+console.log(Person.index.restore(1));
 console.log(Person.index.joqularIdMap[1]);
 
 // drop indexedDB ... go right to local storage and store just indexes!

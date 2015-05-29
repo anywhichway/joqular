@@ -370,18 +370,19 @@
 							path.push(possibleReference[test][possiblepath]);
 						} else {
 							path.push(possibleReference[possiblepath]);
+							test = possibleReference.test;
 						}
 						for(var i=0;i<path.length && value!==undefined;i++) {
 							value = value[path[i]];
 						}
 						return {test: test, value: toObject(value)};
 					}
-					return {value: toObject(possibleReference)};
+					return {value: toObject(possibleReference), test:possibleReference.test};
 				} else if(test) {
 					return {test: test, value: toObject(value)};
 				}
 			}
-			return {value: toObject(possibleReference)};
+			return {value: toObject(possibleReference), test:possibleReference.test};
 		}
 		return {value: toObject(possibleReference)};
 	}
@@ -438,7 +439,7 @@
 				if(value1===undefined) {
 					return false;
 				}
-				//if(value1!==undefined) {
+
 					var deref = dereference(pattern[key],aliases,scope);
 					value2 = deref.value;
 					if(value2===dereference.ignore) {
@@ -448,17 +449,13 @@
 						return false;
 					}
 					var type2 = getIntrinsicType(value2);
-					//value2s.push(value2);
-					//return value2s.every(function(value2) {
-						return (!deref.test && value1===value2 || 
-							(!deref.test && value1.valueOf()===value2.valueOf()) ||
-							(typeof(value1[deref.test])==="function" && value1[deref.test].call(value1,value2)) ||
-							(type1==="function" && value1.predicate && value1.call(me,(value2!=null ? value2.valueOf() : value2))) ||
-							(type1==="function" && value1.provider && providerTest(value1.call(me),value2,deref.test,aliases)) ||
-							(type1!=="function" && typeof(value1[deref.test])!=="function" && (type1!==type2 || type2==="object") && value1.joqularMatch && joqularMatch.call(value1,value2,aliases,scope.concat([me]))));
-					//});
-				//}
-				//return false;
+					return (!deref.test && value1===value2 || 
+						(!deref.test && value1.valueOf()===value2.valueOf()) ||
+						(typeof(value1[deref.test])==="function" && value1[deref.test].call(value1,value2)) ||
+						(type2==="function" && value2(value1)) ||
+						(type1==="function" && value1.predicate && value1.call(me,(value2!=null ? value2.valueOf() : value2))) ||
+						(type1==="function" && value1.provider && providerTest(value1.call(me),value2,deref.test,aliases)) ||
+						(type1!=="function" && typeof(value1[deref.test])!=="function" && (type1!==type2 || type2==="object") && value1.joqularMatch && joqularMatch.call(value1,value2,aliases,scope.concat([me]))));
 			})) {
 				return this;
 			}
@@ -479,6 +476,7 @@
 	}
 	function Kind() {
 		this.joqularIdMap = new Ids();
+		this.forgeinIds = {};
 	}
 	Kind.prototype.getValues = function(kind) {
 		var me = this;
@@ -494,7 +492,7 @@
 					case "Number": value = parseFloat(key); values.push(value); break;
 					case "String": value = key; values.push(value); break;
 					case "Null": value = null; values.push(value); break;
-					// index find will assume any other types must be testes during instance match cycle
+					// index find will assume any other types must be tested during instance match cycle
 				};
 			});
 			if(kind==="Number") {
@@ -513,7 +511,6 @@
 		return this.joqularIds;
 	}
 	Kind.prototype.find = function(index,value,results,scopes,scopekey,scopekind) {
-		//scopes || (scopes = []);
 		var me = this, testvalue = value.valueOf(), kindname = value.constructor.name, pass = [], instancevalues, instancevalue;
 		if(!me[scopekey]) {
 			results.splice(0,results.length);
@@ -557,7 +554,7 @@
 							pass = pass.concat(me[scopekey][kindname].getIds());
 						} else {
 							instancevalues.forEach(function(instancevalue) {
-								instancevalue = new Object.joqularIndexes[kindname](instancevalue).valueOf();
+								(kindname==="Number" && isNaN(instancevalue)) || (instancevalue = new Object.joqularIndexes[kindname](instancevalue).valueOf());
 								if(value(instancevalue)) {
 									pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
 								}
@@ -666,10 +663,9 @@
 		// walk other object
 		} else if(me[scopekey][kindname] && me[scopekey][kindname].forgeinIds && Object.joqularIndexes[kindname]) {
 			var fids = Object.keys(me[scopekey][kindname].forgeinIds);
-			if(Object.joqularIndexes[kindname].index.find(value,fids)) {
-				fids.forEach(function(fid) {
-					pass.push(me[scopekey][kindname].forgeinIds[fid]);
-				});
+			var subresults = Object.joqularIndexes[kindname].index.find(value,fids,scopes,scopekey);
+			if(subresults.length>0) {
+				pass = pass.concat(me[scopekey][kindname].getIds());
 			}
 		// walk keys and sub-objects
 		} else if(kindname==="Pattern") {
@@ -685,7 +681,8 @@
 				kindnames.forEach(function(kindname) {
 					if(me[scopekey][kindname].forgeinIds && Object.joqularIndexes[kindname]) {
 						var fids = Object.keys(me[scopekey][kindname].forgeinIds);
-						if(Object.joqularIndexes[kindname].index.find(value,fids)) {
+						var subresults = Object.joqularIndexes[kindname].index.find(value,fids,scopes,scopekey);
+						if(subresults.length>0) {
 							pass = pass.concat(me[scopekey][kindname].getIds());
 						}
 					}
@@ -741,8 +738,7 @@
 			if(key.indexOf("$$")===0) {
 				return;
 			}
-			var value = (pattern[key]!=null ? pattern[key].valueOf() : pattern[key]), type = typeof(value); // converts pseudo primitive like Time, Duration to the primitive
-			value = (value instanceof Date ? value.getTime() : value); // convert dates to numbers
+			var value = pattern[key], type = typeof(value); 
 			value = toObject(value);
 			if(value.valueOf()!=null && type==="object") {
 				if(value instanceof Array) {
@@ -752,13 +748,11 @@
 					if(possibletest && (["$$"].indexOf(possibletest)>=0 || possibletest.indexOf("/")===0 || possibletest.indexOf(".")===0)) {
 						value = me.defined;
 						scope[key] = value; // just ensure key defined, leave resolution until final match, i.e. don't do in the index find, do against preliminary results 
-					} else if(possibletest.indexOf("$")===0) {
+					} else if(possibletest && possibletest.indexOf("$")===0) {
 						value = toObject(value[possibletest]);
 						Object.defineProperty(value,"test",{enumerable:false,configurable:true,writable:true,value:possibletest.substring(1)});
 						scope[key] = value;
-					} else if(value instanceof Date) {
-						scope[key] = value; // need to work on this;
-					} else if(Object.keys(value).length===0) { // handle keyless objects like Sets
+					} else if(!(value instanceof Date) && Object.keys(value).length===0) { // handle keyless objects like Sets
 						value = me.defined;
 						scope[key] = value; // handle outside of index
 					} else if(typeof(me[possibletest])==="function") {
@@ -831,7 +825,7 @@
 	}
 	Index.prototype.getIds = function() {
 		if(!this.joqularIds) {
-			this.joqularIds = Object.keys(this.joqularIdMap);
+			this.joqularIds = Object.keys(this.keys.joqularIdMap);
 		}
 		return this.joqularIds;
 	}
@@ -844,17 +838,18 @@
 			} else {
 				id = instance.joqularId;
 			}
-			me.joqularIdMap[id] = instance;
+			me.keys.joqularIdMap[id] = instance;
+			Object.observe(instance,function(changes) {
+				me.update(instance.joqularId,changes);
+			});
 		}
 		for(var key in instance) {
-			if(typeof(instance.valueOf())==="string" && typeof(instance[key])==="string") continue; // skip indexing strings by char
-			value = (instance[key]!=null ? instance[key].valueOf() : instance[key]); // converts pseudo primitive like Time to the primitive
-			value = (value instanceof Date ? value.getTime() : value); // convert dates to numbers
+			if(kindname==="String" && typeof(instance[key])==="string") continue; 
+			value = instance[key];
 			value = toObject(value); 
 			if(value===undefined) continue;
 			kindname = value.constructor.name, type = typeof(value.valueOf());
 			if(instance[key]===null) type = "undefined";
-			// Object.joqularIndexes[kindname] || JOQULAR.createIndex(value.constructor);
 			Object.joqularIndexes[kindname] || (Object.joqularIndexes[kindname] = value.constructor);
 			Object.joqularIndexes[kindname].index || (Object.joqularIndexes[kindname].index = new Index(kindname));
 			kind[key] || (kind[key] = new Key());
@@ -865,15 +860,12 @@
 			if(["Boolean","Number","String","Null"].indexOf(kindname)>=0) {
 				kind[key][kindname][value.valueOf()] || (kind[key][kindname][value.valueOf()] = new Value());
 				kind[key][kindname][value.valueOf()].joqularIdMap[id] = 1;
-				Object.joqularIndexes[kindname].index.index(value);
-				// need to add some special stuff to enable restore of Dates, Durations, Times that have been convereted to primitives
-				// if(value.valueOf()!==instance[key] || instance[key] instanceof Date) ...
+				(kindname==="Number" && isNaN(value)) || Object.joqularIndexes[kindname].index.index(value);
 			} else if(kindname!==me.kindName || value.joqularId!==id){
 				if(value.joqularId==null) {
 					Object.joqularIndexes[kindname].index.index(value);
 				}
-				kind[key][kindname].forgeinIds || (kind[key][kindname].forgeinIds = {});
-				kind[key][kindname].forgeinIds[value.joqularId] = id; // how do we keep this updated for deletes?
+				kind[key][kindname].forgeinIds[value.joqularId] = id; 
 			}
 		}
 		if(instance instanceof Array) {
@@ -883,96 +875,148 @@
 			kind.length.Number[instance.length].joqularIdMap[id] = 1;
 			kind.length.Number.joqularIdMap[id] = 1;
 		}
-//		if(instance instanceof Function) {
-//			kind.name!=null || (kind.name = new Key());
-//			kind.name.String || (kind.name.String = new Kind());
-//			kind.name.String[instance.name] || (kind.name.String[instance.name] = new Value());
-//			kind.name.String[instance.name].joqularIdMap[id] = 1;
-//			kind.name.String.joqularIdMap[id] = 1;
-//		}
 	}
-	Index.prototype.find = function(pattern,aliases) {
-		var me = this, findpattern = (pattern instanceof Pattern ? pattern : new FindPattern(pattern,aliases)), 
-		matchpattern = (pattern instanceof Pattern ? pattern : new MatchPattern(pattern,false,aliases)),
-		keys = Object.keys(findpattern), found = [], results = [];
-		if(keys.every(function(key) {
-			return me.keys.find(me,findpattern[key],found,[me.keys],key,findpattern[key].constructor.name);
-		})) {
-			if(pattern.$forall && !found.every(pattern.$forall)) {
-				return [];
-			}
-			if(pattern.$exists && !found.some(pattern.$exists)) {
-				return [];
-			}
-			var matchlength = Object.keys(matchpattern).length;
-			found.forEach(function(id) {
-				if(matchlength===0 || joqularMatch.call(me.joqularIdMap[id],matchpattern,aliases)) {
-					results.push(me.joqularIdMap[id]);
-				}
-			});
-			results.index = found.index;
-		}
-		return results;
-	}
-	function joqularIndexValue(id,value,index,key,type) {
-		index[key] || (index[key] = {});
-		index[key][type] || (index[key][type] = {});
-		index[key][type][value] || (index[key][type][value] = {});
-		index[key][type][value][id] = 1;
-		delete index[key][type].joqularValues; // remove cached values, they will be regenerated by first query
-	}
-	function joqularIndexFunction(id,func,index,key) {
-		if(func.predicate || func.provider) {
-			index["function"] || (index["function"] = {});
-			(index["function"][key] && typeof(index["function"][key])!=="function") || (index["function"][key] = {}); // index is a dumb object, so if there is a function, ok to overwrite
-			index["function"][key][id] = 1;
-		}
-	}
-	function joqularUpdate(id,changes,index) {
-		var constructor = this;
+	Index.prototype.update = function(id,changes) {
+		var me = this, kind = this.keys;
 		changes.forEach(function(change) {
-			var key = change.name, value = change.object[key];
+			var key = change.name, value = toObject(change.object[key]), kindname = value.constructor.name, type = typeof(change.object[key]);
 			if(change.type==="update" || change.type==="delete") {
-				var type = typeof(change.oldValue);
-				if(change.oldValue!==null && type==="object") {
-					joqularDelete.call(constructor,id,change.oldValue,index[key]);
-				} else if(index[key][type][change.oldValue]) {
-					delete index[key][type][change.oldValue][id];
+				var oldvalue = toObject(change.oldValue), oldkindname = oldvalue.constructor.name, oldtype = typeof(change.oldValue);
+				if(change.oldValue!==null && oldtype==="object") {
+					delete kind[key][oldkindname].forgeinIds[oldvalue.joqularId]; 
+				} else if(kind[key][oldkindname][change.oldValue].joqularIdMap[id]) {
+					delete kind[key][oldkindname][change.oldValue].joqularIdMap[id]; // delete reference from index
+					delete kind[key][oldkindname][change.oldValue].joqularIds; // delete cached id list
 				}
 			}
-			if(change.type==="add") {
-				index[key]={};
-			}
+			kind[key] || (kind[key] = new Key());
+			kind[key][kindname] || (kind[key][kindname] = new Kind());
 			if(change.type==="update" || change.type==="add") {
-				var value = change.object[key],type = typeof(value);
-				if(value instanceof Object) {
-					if(type==="function") {
-						joqularIndexFunction.call(constructor,value,index,key);
-					} else {
-						joqularIndex.call(constructor,id,value,index[key]);
+				if(type==="object" && value!=null) {
+					if(value.joqularId===null) {
+						Object.joqularIndexes[kindname] || (Object.joqularIndexes[kindname] = value.constructor);
+						Object.joqularIndexes[kindname].index || (Object.joqularIndexes[kindname].index = new Index(kindname));
+						Object.joqularIndexes[kindname].index.index(value);
 					}
+					kind[key][kindname].forgeinIds[value.joqularId]
 				} else {
-					joqularIndexValue.call(constructor,id,value,index,key,type)
+					kind[key][kindname][value.valueOf()] || (kind[key][kindname][value.valueOf()] = new Value());
+					kind[key][kindname][value.valueOf()].joqularIdMap[id] = 1;
 				}
 			}
 			return;
 		});
 	}
-	function joqularDelete(id,instance,index) {
-		var constructor = this;
-		if(index) {
-			var keys = Object.keys(instance);
-			keys.forEach(function(key) {
-				if(index[key]) {
-					var value = instance[key], type = typeof(value);
-					if(value!==null && type==="object") {
-						joqularDelete.call(constructor,value,index[key]);
-					} else if(index[key][type] && index[key][type][value]){
-						delete index[key][type][value][id];
-					}
+	Index.prototype.find = function(pattern,aliases,scopes,scopekey) {
+		var me = this, findpattern = (pattern instanceof Pattern ? pattern : new FindPattern(pattern,aliases)), 
+		matchpattern = (pattern instanceof Pattern ? pattern : new MatchPattern(pattern,false,aliases)),
+		keys = Object.keys(findpattern), found = [], results = [];
+		if(scopes) {
+			scopes = [me.keys].concat(scopes);
+		} else {
+			scopes = [me.keys];
+		}
+		if(keys.every(function(key) {
+			return me.keys.find(me,findpattern[key],found,scopes,key,findpattern[key].constructor.name);
+		})) {
+			if(keys.length===0) {
+				found = me.getIds();
+				found.index = true;
+			}
+			results.index = found.index;
+			if(pattern.$forall && !found.every(function(id) {return pattern.$forall(me.keys.joqularIdMap[id]); })) {
+				return results;
+			}
+			if(pattern.$exists && !found.some(function(id) {return pattern.$exists(me.keys.joqularIdMap[id]); })) {
+				return results;
+			}
+			var matchlength = Object.keys(matchpattern).length;
+			found.forEach(function(id) {
+				var matchscopeid, matchscope;
+				if(scopekey && scopes[scopes.length-1][scopekey]) {
+					matchscopeid = scopes[scopes.length-1][scopekey][me.kindName].forgeinIds[id];
+					matchscope = [scopes[scopes.length-1].joqularIdMap[matchscopeid]];
+				}
+				if(matchlength===0 || joqularMatch.call(me.keys.joqularIdMap[id],matchpattern,aliases,matchscope)) {
+					results.push(me.keys.joqularIdMap[id]);
 				}
 			});
 		}
+		return results;
+	}
+	Index.prototype.clear = function(indexOnly,asynch) {
+		this.joqularIdMap = new Ids();
+		this.keys = new Kind();
+		this.nextId = 0;
+		var promise;
+		if(!indexOnly) {
+			promise = this.save(); // writes empty index since values reset above
+		} else {
+			promise = new Promise(function(resolve,reject) { resolve(); });
+		}
+		if(typeof(asynch)==="function") {
+			promise.then(function(count) {
+				asynch(null,count);
+			})["catch"](function(e) {
+				asynch(e);
+			});
+			return null;
+		}
+		return promise;
+	}
+	Index.prototype.flush = function(id) {
+		var me = this, ids;
+		if(id!=null) {
+			ids = [id];
+		} else {
+			ids = me.getIds();
+		}
+		ids.forEach(function(id) {
+			me.joqularIdMap[id] = 1;
+		});
+	}
+	Index.prototype.restore = function(id) {
+		var me = this, cons = Object.joqularIndexes[me.kindName], ids, results = {};
+		if(id!=null) {
+			ids = [id];
+		} else {
+			ids = me.getIds();
+		}
+		ids.forEach(function(id) {
+			var object = me.joqularIdMap[id];
+			if(!object) {
+				return;
+			}
+			if(object===1) {
+				object = Object.create(cons.prototype);
+				Object.defineProperty(object,"constructor",{enumerable:false,configurable:true,writable:true,value:cons});
+				object.__proto__ = cons.prototype;
+				var keys = Object.keys(me.keys);
+				keys.forEach(function(key) {
+					var kindnames = Object.keys(me.keys[key]);
+					kindnames.forEach(function(kindname) {
+							if(["Boolean","Number","String","Null"].indexOf(kindname)>=0) { // FUnction??
+								var values = me.keys[key][kindname].getValues(kindname);
+								values.forEach(function(value) {
+									if(me.keys[key][kindname][value].joqularIdMap[id]) {
+										switch(kindname) {
+										case "Boolean": object[key] = (value==="true" ? true : false); break;
+										case "Number": object[key] = parseFloat(value); break;
+										case "String" : object[key] = value; break;
+										case "Null" : object[key] = null;
+										}
+									}
+								});
+							} else {
+								// joqularRestore(object,cons.index[key][type]);
+							}
+						});
+				});
+				me.joqularIdMap[id] = object;
+				results[id] = object;
+			}	
+		});
+		return results;
 	}
 	function QueryPattern(pattern) {
 		this.value = pattern;
@@ -1084,7 +1128,7 @@
 						matches = [];
 						var ids = me.aliases[aliasname].index.getIds();
 						ids.forEach(function(id) {
-							matches.push(me.aliases[aliasname].index.joqularIdMap[id]);
+							matches.push(me.aliases[aliasname].index.keys.joqularIdMap[id]);
 						});
 					}
 					if(matches.length===0) {
@@ -1323,84 +1367,9 @@
 							
 						}
 					});
+					newcons.prototype = Object.create(cons.prototype);
 					newcons.index = new Index(name);
 					newcons.indexing = {};
-					Object.defineProperty(newcons,"joqularClear",{enumerable:false,value:function(indexOnly,asynch) {
-						var count = Object.keys(newcons.ids).length-1;
-						newcons.ids = {};
-						newcons.ids.nextId = 0;
-						newcons.index = {};
-						var promise;
-						if(!indexOnly && newcons.joqularSave) {
-							promise = newcons.joqularSave();
-						} else {
-							promise = new Promise(function(resolve,reject) { resolve(); });
-						}
-						if(typeof(asynch)==="function") {
-							promise.then(function(count) {
-								asynch(null,count);
-							})["catch"](function(e) {
-								asynch(e);
-							});
-							return null;
-						}
-						return promise;
-					}});
-					Object.defineProperty(newcons,"joqularFlush",{enumerable:false,value:function(id) {
-						var ids;
-						if(id!=null) {
-							ids = [id];
-						} else {
-							ids = newcons.index.getIds();
-						}
-						ids.forEach(function(id) {
-							newcons.index.joqularIdMap[id] = 1;
-						});
-					}});
-					Object.defineProperty(newcons,"joqularRestore",{enumberable:false,value:function(id) {
-						var ids, results = {};
-						if(id!=null) {
-							ids = [id];
-						} else {
-							ids = newcons.index.getIds();
-						}
-						ids.forEach(function(id) {
-							var object = newcons.index.joqularIdMap[id];
-							if(!object) {
-								return;
-							}
-							if(object===1) {
-								object = Object.create(newcons.prototype);
-								Object.defineProperty(object,"constructor",{enumerable:false,configurable:true,writable:true,value:newcons});
-								object.__proto__ = newcons.prototype;
-								var keys = Object.keys(newcons.index.keys);
-								keys.forEach(function(key) {
-									var kindnames = Object.keys(newcons.index.keys[key]);
-									kindnames.forEach(function(kindname) {
-											if(["Boolean","Number","String","Null"].indexOf(kindname)>=0) { // FUnction??
-												var values = Object.keys(newcons.index.keys[key][kindname]);
-												values.forEach(function(value) {
-													if(newcons.index.keys[key][kindname][value][id]) {
-														switch(kindname) {
-														case "Boolean": object[key] = (value==="true" ? true : false); break;
-														case "Number": object[key] = parseFloat(value); break;
-														case "String" : object[key] = value; break;
-														case "Null" : object[key] = null;
-														}
-													}
-												});
-											} else {
-												// joqularRestore(object,newcons.index[key][type]);
-											}
-										});
-								});
-								newcons.index.joqularIdMap[id] = object;
-								results[id] = object;
-							}	
-						});
-						return results;
-					}});
-					newcons.prototype = Object.create(cons.prototype);
 					if(config.datastore && config.datastore.name && config.datastore.type==="IndexedDB") {
 						Object.defineProperty(newcons,"joqularSave",{enumerable:false,value:function(aysnch) {
 							var me = this, tid;
@@ -1571,7 +1540,6 @@
 							}
 						}
 						return me.index.find(pattern,aliasnames)
-						//return joqularFind.call(me,pattern,me.index,aliasnames);
 					}});
 					Object.defineProperty(constructor,"joqularIndex",{enumarable:false,value:function(instance,async) {
 						var me = this;
@@ -1579,13 +1547,11 @@
 							var tid;
 							if(typeof(async)==="function") {
 								tid = setTimeout(function() { me.index.index(instance); delete me.indexing[tid]; async(instance); },0);
-								//tid = setTimeout(function() { joqularIndex.call(me,id,instance,me.index); delete me.indexing[tid]; async(instance); },0);
 								me.indexing[tid] = true;
 								return tid;
 							} else {
 								var promise = new Promise(function(resolve,reject) {
 									tid = setTimeout(function() { me.index.index(instance); delete me.indexing[tid]; resolve(instance); },0);
-									//tid = setTimeout(function() { joqularIndex.call(me,id,instance,me.index); delete me.indexing[tid]; resolve(instance); },0);
 								});
 								me.indexing[tid] = promise;
 								return promise;
@@ -1599,32 +1565,32 @@
 					if(value==null) {
 						value = new Date().getTime()
 					} else if(value.constructor===Time || value instanceof Time) {
-						value = value.value;
+						value = value.valueOf();
 					} else if(value instanceof Date) {
 						value = value.getTime();
 					} else if(value instanceof TimeSpan) {
-						value = value.startingTime.valueOf();
+						value = value.starts.valueOf();
 					} else if(typeof(value)==="string") {
 						value = Date.parse(value);
 					}
-					this.value = value;
+					this.milliseconds = value;
 					this.toPrecision(precision,true);
 					Object.defineProperty(this,"constructor",{enumerable:false,configurable:true,writable:true,value:Time});
 				};
 				Time.prototype = Object.create(constructor.prototype);
 				Time.prototype.valueOf = function() {
-					return this.value;
+					return this.milliseconds;
 				};
 				Time.prototype.withPrecision = function(precision) {
 					return this.toPrecision(precision,false);
 				};
 				Time.prototype.toPrecision = function(precision,modify) {
 					modify = (modify || modify==null ? true : false);
-					if(!precision || this.value===Infinity || this.value===-Infinity || isNaN(this.value)) {
+					if(!precision || this.milliseconds===Infinity || this.milliseconds===-Infinity || isNaN(this.milliseconds)) {
 						if(modify) {
 							return this;
 						}
-						return new Time(this.value);
+						return new Time(this.milliseconds);
 					}
 					var Y1 = this.getFullYear();
 					var M1 = (["M","D","h","m","s","ms"].indexOf(precision)!==-1 ? this.getMonth() : null);
@@ -1724,9 +1690,9 @@
 				Object.keys(dateProperties).forEach(function(key) {
 					if(!Time.prototype[key]) {
 						Time.prototype[key] = function() {
-								var dt = new Date(this.value);
+								var dt = new Date(this.milliseconds);
 								var result = dt[key].apply(dt,arguments);
-								this.value = dt.getTime();
+								this.milliseconds = dt.getTime();
 								return result;
 						}
 					}
@@ -1737,13 +1703,14 @@
 						period = "ms";
 						value = value.valueOf();
 					}
-					this.value = value * Duration.factors[period];
+					this.length = value * Duration.factors[period];
 					this.range = 0;
 					Object.defineProperty(this,"constructor",{enumerable:false,configurable:true,writable:true,value:Duration});
 				};
 				Duration.factors = {
 						Y: 31557600*1000,
 						M: (31557600*1000)/12, // psuedo-month
+						W: 7 * 24 * 60 * 60 * 1000,
 						D: 24 * 60 * 60 * 1000,
 						h: 60 * 60 * 1000,
 						m: 60 * 1000,
@@ -1751,8 +1718,16 @@
 						ms: 1
 					}
 				Duration.prototype = Object.create(constructor.prototype);
+				Object.defineProperty(Duration.prototype,"years",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.length/Duration.factors["Y"]; }});
+				Object.defineProperty(Duration.prototype,"months",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.length/Duration.factors["M"]; }});
+				Object.defineProperty(Duration.prototype,"weeks",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.length/Duration.factors["W"]; }});
+				Object.defineProperty(Duration.prototype,"days",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.length/Duration.factors["D"]; }});
+				Object.defineProperty(Duration.prototype,"hours",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.length/Duration.factors["h"]; }});
+				Object.defineProperty(Duration.prototype,"minutes",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.length/Duration.factors["m"]; }});
+				Object.defineProperty(Duration.prototype,"seconds",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.length/Duration.factors["s"]; }});
+				Object.defineProperty(Duration.prototype,"milliseconds",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.length; }});
 				Duration.prototype.valueOf = function() {
-					return this.value;
+					return this.length;
 				};
 				Duration.prototype.lt = toPredicate(function(value,period) {
 					period || (period = "s");
@@ -1797,29 +1772,38 @@
 					this.range = 0;
 				};
 				// need to define gt, lt etc. in context of range
-				function TimeSpan(startingTime,endingTime) {
-					if((startingTime && startingTime.constructor===TimeSpan) || startingTime instanceof TimeSpan) {
-						return new TimeSpan(startingTime.startingTime,startingTime.endingTime);
+				function TimeSpan(starts,ends) {
+					if((starts && starts.constructor===TimeSpan) || starts instanceof TimeSpan) {
+						return new TimeSpan(starts.starts,starts.ends);
 					}
-					this.startingTime = (startingTime!=null ? new Time(startingTime) : new Time(-Infinity));
-					this.endingTime = (endingTime!=null ? new Time(endingTime) : new Time(Infinity));
-					Object.defineProperty(this,"duration",{enumerable:true,configurable:false,get:function() { return this.endingTime - this.startingTime}, set: function() {}});
+					this.starts = (starts!=null ? new Time(starts).valueOf() : new Time(-Infinity).valueOf());
+					this.ends = (ends!=null ? new Time(ends).valueOf() : new Time(Infinity).valueOf());
+					Object.defineProperty(this,"duration",{enumerable:true,configurable:false,get:function() { return this.ends - this.starts}, set: function() {}});
 					Object.defineProperty(this,"constructor",{enumerable:false,configurable:true,writable:true,value:TimeSpan});
 				};
 				TimeSpan.prototype = Object.create(constructor.prototype);
 				TimeSpan.prototype.contains = toPredicate(function(value,precision) {
-					var startingTime = new Time(value.startingTime,precision);
-					var endingTime = new Time(value.endingTime,precision);
-					var time = new Time(value,precision);
-					return startingTime.valueOf() <= time.valueOf() <= endingTime.valueOf();
+					var starts, ends, time;
+					if(value instanceof TimeSpan) {
+						starts = time = new Time(value.starts,precision).valueOf();
+						ends = new Time(value.ends,precision).valueOf();
+					} else {
+						starts = time = ends = new Time(value.valueOf(),precision);
+					}
+					return this.starts <= starts <= time <= ends <= this.ends;
 				});
 				TimeSpan.prototype.intersects = toPredicate(function(value,precision) {
-					var startingTime = new Time(value.startingTime,precision);
-					var endingTime = new Time(value.endingTime,precision);
-					if(this.startingTime>=startingTime && this.startingTime<=endingTime) {
+					var starts, ends;
+					if(value instanceof TimeSpan) {
+						starts = new Time(value.starts,precision).valueOf();
+						ends = new Time(value.ends,precision).valueOf();
+					} else {
+						starts = ends = new Time(value.valueOf(),precision);
+					}
+					if(this.starts>=starts && this.starts<=ends) {
 						return true;
 					}
-					if(this.endingTime<=value.endingTime && this.endingTime>=startingTime) {
+					if(this.ends<=value.ends && this.ends>=starts) {
 						return true;
 					}
 					return false;
@@ -1828,14 +1812,14 @@
 					return !this.intersects(value,precision);
 				});
 				TimeSpan.prototype.coincident = toPredicate(function(value,precision) {
-					var startingTime, endingTime;
-					if(value instanceof Date || typeof(value)==="number") {
-						startingTime = endingTime = new Time(value,precision);
+					var starts, ends;
+					if(value instanceof TimeSpan) {
+						starts = new Time(value.starts,precision).valueOf();
+						ends = new Time(value.ends,precision).valueOf();
 					} else {
-						startingTime = new Time(value.startingTime,precision);
-						endingTime = new Time(value.endingTime,precision);
+						starts = ends = new Time(value.valueOf(),precision);
 					}
-					return new Time(this.startingTime,precision).valueOf()==startingTime.valueOf() && new Time(this.endingTime,precision).valueOf()==endingTime.valueOf();
+					return this.starts==starts && this.ends==ends;
 				})
 				TimeSpan.prototype.eq = toPredicate(function(value,precision) {
 					if(this===value) {
@@ -1844,44 +1828,44 @@
 					if(!(value instanceof TimeSpan)) {
 						return false;
 					}
-					return new Time(this.startingTime,precision).valueOf() === new Time(value.startingTime,precision).valueOf() &&
-						new Time(this.endingTime,precision).valueOf() === new Time(value.endingTime,precision).valueOf();
+					return new Time(this.starts,precision).valueOf() === new Time(value.starts,precision).valueOf() &&
+						new Time(this.ends,precision).valueOf() === new Time(value.ends,precision).valueOf();
 				});
 				TimeSpan.prototype.adjacentOrBefore = toPredicate(function(value,precision) {
-					return new Time(this.endingTime+new Duration(1,precision),precision).valueOf() <= new Time(value,precision).valueOf();
+					return new Time(this.ends+new Duration(1,precision),precision).valueOf() <= new Time(value,precision).valueOf();
 				});
 				TimeSpan.prototype.before = toPredicate(function(value,precision) {
-					return new Time(this.endingTime+new Duration(1,precision),precision).valueOf() < new Time(value,precision).valueOf();
+					return new Time(this.ends+new Duration(1,precision),precision).valueOf() < new Time(value,precision).valueOf();
 				});
 				TimeSpan.prototype.adjacentBefore = toPredicate(function(value,precision) {
-					return new Time(this.endingTime+new Duration(1,precision),precision).valueOf() === new Time(value,precision).valueOf();
+					return new Time(this.ends+new Duration(1,precision),precision).valueOf() === new Time(value,precision).valueOf();
 				});
 				TimeSpan.prototype.adjacentOrAfter = toPredicate(function(value,precision) {
-					var endingTime;
+					var ends;
 					if(value.constructor===TimeSpan || value instanceof TimeSpan) {
-						endingTime = new Time(value.endingTime,precision);
+						ends = new Time(value.ends,precision);
 					} else {
-						endingTime = new Time(value,precision);
+						ends = new Time(value,precision);
 					}
-					return new Time(this.startingTime-new Duration(1,precision),precision).valueOf() >= endingTime.valueOf();
+					return new Time(this.starts-new Duration(1,precision),precision).valueOf() >= ends.valueOf();
 				});
 				TimeSpan.prototype.after = toPredicate(function(value,precision) {
-					var endingTime;
+					var ends;
 					if(value.constructor===TimeSpan || value instanceof TimeSpan) {
-						endingTime = new Time(value.endingTime,precision);
+						ends = new Time(value.ends,precision);
 					} else {
-						endingTime = new Time(value,precision);
+						ends = new Time(value,precision);
 					}
-					return new Time(this.startingTime-new Duration(1,precision),precision).valueOf() > endingTime.valueOf();
+					return new Time(this.starts-new Duration(1,precision),precision).valueOf() > ends.valueOf();
 				});
 				TimeSpan.prototype.adjacentAfter = toPredicate(function(value,precision) {
-					var endingTime;
+					var ends;
 					if(value.constructor===TimeSpan || value instanceof TimeSpan) {
-						endingTime = new Time(value.endingTime,precision);
+						ends = new Time(value.ends,precision);
 					} else {
-						endingTime = new Time(value,precision);
+						ends = new Time(value,precision);
 					}
-					return new Time(this.startingTime-new Duration(1,precision),precision).valueOf() == endingTime.valueOf();
+					return new Time(this.starts-new Duration(1,precision),precision).valueOf() == ends.valueOf();
 				});
 				TimeSpan.prototype.adjacent = toPredicate(function(value,precision) {
 					if(this.adjacentBefore(value,precision)) {
@@ -1952,7 +1936,16 @@
 				String.prototype.match.predicate = true;
 				if(config.enhanceDate) {
 					Date.prototype.joqularMatch || (Date.prototype.joqularMatch = constructor.prototype.joqularMatch);
-					Object.defineProperty(Date.prototype,"time",{enumerable:true,configurable:false,set:function() { return; },get:function() { return this.getTime(); }});
+					Object.defineProperty(Date.prototype,"time",{enumerable:true,configurable:false,set:function(time) { this.setTime(time); },get:function() { return this.getTime(); }});
+					Object.defineProperty(Date.prototype,"year",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.getFullYear(); }});
+					Object.defineProperty(Date.prototype,"month",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.getMonth()+1; }});
+					Object.defineProperty(Date.prototype,"dayOfMonth",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.getDate(); }});
+					Object.defineProperty(Date.prototype,"hours",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.getHours(); }});
+					Object.defineProperty(Date.prototype,"minutes",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.getMinutes(); }});
+					Object.defineProperty(Date.prototype,"seconds",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.getSeconds(); }});
+					Object.defineProperty(Date.prototype,"milliseconds",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.getMilliseconds(); }});
+					Object.defineProperty(Date.prototype,"dayOfWeek",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.getDay()+1; }});
+					
 					Date.prototype.lt = toPredicate(function(value,precision) {
 						if(value instanceof TimeSpan) {
 							return value.after(this,precision);

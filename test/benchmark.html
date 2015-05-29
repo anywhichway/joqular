@@ -68,10 +68,10 @@ function cleanup() {
 	indexedDB.deleteDatabase("JOQULARTest");
 }
 
-var numobj = 10000;
+var numobj = 500000;
 var find = Math.floor((Math.random() * 100) + 1);
 var objects = [];
-var loops = 10;
+var loops = 1;
 
 console.log("Running benchmark: " + numobj + " objects " + loops + " loops.");
 
@@ -189,7 +189,7 @@ function test(objects,expectedResultCount,iterations) {
 		promise.then(function(count) { if(count<iterations) return indexeddb(count); });
 		return promise;
 	}
-	promises.push(indexeddb(0));
+	//promises.push(indexeddb(0));
 	
 	
 	// PouchDB
