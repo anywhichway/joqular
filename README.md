@@ -1,4 +1,13 @@
 # joqular
+
+NOTE: Version 2.0 of JOQULAR was about to be released November 15th, 2015 when it was announced Object.observe is being dropped from the ECMA standards track. This will require re-working certain portions of JOQULAR. Hence, there will be a delay. However, it is recommended you not start using this version for anything other than exploratory investigation. The new version of JOQULAR has the following:
+
+1) A far cleaner code-base
+2) A more modular code-base
+3) Supports schema based validation on a continuous basis per property change or a per Object invocation
+4) Supports both client and server storage with synchronization
+
+
 JavaScript Object Query Language Representation - Funny, it's mostly JSON.
 
 - Serializable pattern and SQL like object matching for JavaScript, including joins!
