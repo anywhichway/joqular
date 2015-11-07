@@ -1,6 +1,6 @@
 {
   "name": "joqular",
-  "version":"1.01.01",
+  "version":"1.02.01",
   "description": "(JOQULAR - JavaScript Object Query Language Representation) A high speed in-memory, isomorphic, JavaScript database wih serializable queries.",
   "main": "joqular.js",
   "scripts": {
@@ -22,7 +22,8 @@
     "WebDB",
     "WebSQL",
     "database",
-    "SQL"
+    "SQL",
+    "NoSQL"
   ],
   "author": "Simon Y. Blackwell <syblackwell@anywhichway.com> (http://www.github.com/anywhichway)",
   "license": "GPL3",

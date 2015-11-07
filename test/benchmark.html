@@ -4,7 +4,7 @@
 <script src="object-observe.js" type="text/javascript"></script>
 <script src="es6-promise.min.js" type="text/javascript"></script>
 <script src="es6-collections.min.js" type="text/javascript"></script>
-<script src="../joqular.min.js" type="text/javascript"></script>
+<script src="../joqular.js" type="text/javascript"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pouchdb/3.4.0/pouchdb.min.js" type="text/javascript"></script>
 <script src="pouchdb.find.min.js" type="text/javascript"></script>
 <script src="fdb-all.min.js" type="text/javascript"></script>
@@ -68,36 +68,28 @@ function cleanup() {
 	indexedDB.deleteDatabase("JOQULARTest");
 }
 
-var numobj = 10000;
+var numobj = 500000;
 var find = Math.floor((Math.random() * 100) + 1);
 var objects = [];
-var loops = 10;
+var loops = 1;
 
 console.log("Running benchmark: " + numobj + " objects " + loops + " loops.");
 
 var i = loops;
 while(i-->0) {
 	var start =  window.performance.now();
-	for(let i=0;i<numobj;i++) {
-		let p = new PerfTestObject(Math.floor((Math.random() * 100) + 1));
+	for(var j=0;j<numobj;j++) {
+		var p = new PerfTestObject(Math.floor((Math.random() * 100) + 1));
 		objects.push(p);
 	}
 	var end =  window.performance.now();
 	perfresults.JOQULAR.index.push(end-start);
 }
-objects = [];
-PerfTestObject.ids = {};
-PerfTestObject.ids.nextId = 0;
-PerfTestObject.index = {};
-for(let i=0;i<numobj;i++) {
-	let p = new PerfTestObject(Math.floor((Math.random() * 100) + 1));
-	objects.push(p);
-}
 var lresults = [];
 var start =  window.performance.now();
-for(let i=0;i<objects.length;i++) {
-	if(objects[i].id === find) {
-		lresults.push(objects[i]);
+for(var j=0;j<objects.length;j++) {
+	if(objects[j].id === find) {
+		lresults.push(objects[j]);
 	}
 }
 var end =  window.performance.now();
@@ -113,7 +105,7 @@ test(objects,lresults.length,loops).then(function() {
 function test(objects,expectedResultCount,iterations) {
 	var promises = [];
 	// JOQULAR
-	function jocular(count) {
+	function joqular(count) {
 		var promise = new Promise(function(resolve,reject) {
 			var start = window.performance.now();
 			var jresults = PerfTestObject.joqularFind({id: find});
@@ -121,26 +113,30 @@ function test(objects,expectedResultCount,iterations) {
 			perfresults.JOQULAR.find.push(end-start);
 			console.log("JOQULAR Expected:" + expectedResultCount + " Found:" + jresults.length);
 			start = window.performance.now();
-			PerfTestObject.joqularSave().then(function(saved) {
-				end =  window.performance.now();
-				perfresults.JOQULAR.save.push(end-start);
-				var ids = Object.keys(PerfTestObject.ids);
-				PerfTestObject.joqularClear(true).then(function() {
-					start =  window.performance.now();
-					PerfTestObject.joqularLoad().then(function(loaded) {
-						end =  window.performance.now();
-						perfresults.JOQULAR.load.push(end-start);
-						console.log("JOQULAR Expected:" + saved + " Found:" + (Object.keys(PerfTestObject.ids).length-1));
-						resolve(++count);
-					});
-				});
-				
-			});
+			//PerfTestObject.joqularSave().then(function(saved) {
+			//	end =  window.performance.now();
+			//	perfresults.JOQULAR.save.push(end-start);
+			//	var ids = Object.keys(PerfTestObject.ids);
+			//	PerfTestObject.joqularClear(true).then(function() {
+			//		start =  window.performance.now();
+			//		PerfTestObject.joqularLoad().then(function(loaded) {
+			//			end =  window.performance.now();
+			//			perfresults.JOQULAR.load.push(end-start);
+			//			console.log("JOQULAR Expected:" + saved + " Found:" + (Object.keys(PerfTestObject.ids).length-1));
+			//			resolve(++count);
+			//		});
+			//	});	
+			//});
+			resolve(++count);
 		});
-		promise.then(function(count) { if(count<iterations) return jocular(count); });
+		promise.then(function(count) { 
+			if(count<iterations) {
+				return joqular(count); 
+			}
+		});
 		return promise;
 	}
-	promises.push(jocular(0));
+	promises.push(joqular(0));
 	
 	
 	// IndexDB
@@ -193,7 +189,7 @@ function test(objects,expectedResultCount,iterations) {
 		promise.then(function(count) { if(count<iterations) return indexeddb(count); });
 		return promise;
 	}
-	promises.push(indexeddb(0));
+	//promises.push(indexeddb(0));
 	
 	
 	// PouchDB
@@ -254,7 +250,7 @@ function test(objects,expectedResultCount,iterations) {
 		promise.then(function(count) { if(count<iterations) return pouchdb(count); });
 		return promise;
 	}
-	promises.push(pouchdb(0));
+	//promises.push(pouchdb(0));
 	
 	
 	// Forerunner

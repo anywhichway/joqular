@@ -26,8 +26,8 @@
 	function Null() {
 		
 	}
-	(Null.prototype.eq = function(value) { return value===null; }).predicate = true;
-	(Null.prototype.neq = function(value) { return value!==null; }).predicate = true;
+	(Null.prototype.eq = function(value) { return value===null || value.valueOf()===null; }).predicate = true;
+	(Null.prototype.neq = function(value) { return value!==null && value.valueOf()!==null; }).predicate = true;
 	(Null.prototype["in"] = function(value) {
 		return value && value.contains && value.contains(this);
 	}).predicate=true;
@@ -36,7 +36,6 @@
 	}).predicate=true;
 	Null.prototype.valueOf = function() { return null; }
 	var NULL = new Null();
-	
 	function toObject(value) {
 		if(value===undefined) {
 			return undefined;
@@ -289,38 +288,125 @@
 	// returns possibleReference as value if no aliases provided
 	// returns dereference.ignore if possibleReference is a reference and can be skipped
 	// otherwise returns an object representing the reference value, even if a primitive
-	function dereference(possibleReference,aliases) {
-		if(possibleReference===null || possibleReference===undefined || !aliases) {
-			return possibleReference;
+	function dereference(possibleReference,aliases,scope) {
+		if(possibleReference===null || possibleReference===undefined) {
+			return {value: toObject(possibleReference)};
 		}
-		var type = typeof(possibleReference);
+		var value, type = typeof(possibleReference);
 		if(type==="function") {
-			return possibleReference;
+			if(possibleReference.deferred) {
+				return dereference(possibleReference(),aliases,scope)
+			}
+			return {value: possibleReference};
 		}
 		if(type==="object") {
 			var key = Object.keys(possibleReference)[0];
-			if(aliases instanceof Array) {
+			if(aliases && aliases.indexOf) {
 				if(aliases.indexOf(key)>=0) {
-					return dereference.ignore;
+					return {value: dereference.ignore};
 				}
-				return toObject(possibleReference);
-			} else if(aliases!=null && typeof(aliases)==="object" && aliases[key] && typeof(aliases[key])==="object") {
-				var path = possibleReference[key].split(".");
-				var value = aliases[key];
-				for(var i=0;i<path.length;i++) {
-					value = value[path[i]];
-					if(value===undefined) {
-						return undefined;
+			} else if(aliases!=null && typeof(aliases)==="object") {
+				var path;
+				if(aliases[key] && typeof(aliases[key])==="object") {
+					path = possibleReference[key].split(".");
+					value = aliases[key];
+					for(var i=0;i<path.length;i++) {
+						value = value[path[i]];
+						if(value===undefined) {
+							return {value: undefined};
+						}
+					}
+					return {value: toObject(value)};
+				}
+			}
+			//if(key==="@" && value1 instanceof Object) {
+			//	if(value1.history instanceof History) {
+			//		return value1.history.joqularMatch(value2);
+			//	}
+			//	return false;
+			//}
+			if(possibleReference) {
+				var possiblepath = Object.keys(possibleReference)[0], value, test;
+				if(["lt","lte","eq","neq","gte","gt"].indexOf(possiblepath)>=0 && possibleReference[possiblepath]!==undefined) {
+					test = possiblepath;
+					value = possibleReference[test];
+					if(value instanceof Array) {
+						return {test: test, value: value};
+					}
+					if(possibleReference[test] && typeof(possibleReference[test])!=="string") {
+						possiblepath = Object.keys(possibleReference[test])[0];
 					}
 				}
-				return toObject(value);
+				if(possiblepath && scope) {
+					if(possiblepath.indexOf("/")===0) {
+						value = scope[0];
+						path = possiblepath.substring(1).split(".");
+						if(path[0]==="") {
+							path.shift();
+						}
+					} else if(possiblepath.indexOf("..")===0) {
+						if(scope.length-1<0) { return false; }
+						value = scope[scope.length-1];
+						path = possiblepath.substring(2).split(".");
+						if(path[0]==="") {
+							path.shift();
+						}
+					} else if(possiblepath.indexOf(".")===0) {
+						if(scope.length===0) { return false; }
+						value = scope[scope.length-1];
+						path = possiblepath.substring(1).split(".");
+						if(path[0]==="") {
+							path.shift();
+						}
+					} else if(aliases && aliases[possiblepath] && typeof(aliases[possiblepath])!=="function") {
+						if(possibleReference[test]) {
+							return {test: test, value: toObject(aliases[possiblepath][possibleReference[test][possiblepath]])};
+						} 
+					} else if(test) {
+						return {test: test, value: toObject(value)};
+					}
+					if(value) {
+						if(test) {
+							path.push(possibleReference[test][possiblepath]);
+						} else {
+							path.push(possibleReference[possiblepath]);
+							test = possibleReference.test;
+						}
+						for(var i=0;i<path.length && value!==undefined;i++) {
+							value = value[path[i]];
+						}
+						return {test: test, value: toObject(value)};
+					}
+					return {value: toObject(possibleReference), test:possibleReference.test};
+				} else if(test) {
+					return {test: test, value: toObject(value)};
+				}
 			}
+			return {value: toObject(possibleReference), test:possibleReference.test};
 		}
-		return toObject(possibleReference);
+		return {value: toObject(possibleReference)};
 	}
 	dereference.ignore = {};
 	function getIntrinsicType(value) {
-		return (value!=null ? typeof(value.valueOf()) : typeof(value));
+		if(value===undefined || value===null || value instanceof Null) {
+			return "undefined";
+		}
+		return typeof(value.valueOf());
+	}
+	function providerTest(providerValue,value,test,aliases) {
+		if(value==null) {
+			return providerValue === value;
+		}
+		switch(test) {
+		case "lt": return providerValue < value.valueOf();
+		case "lte": return providerValue <= value.valueOf();
+		case "eq": return providerValue === value.valueOf();
+		case "neq": return providerValue !== value.valueOf();
+		case "gte": return providerValue >= value.valueOf();
+		case "gt": return providerValue > value.valueOf();
+		default: return providerValue === value.valueOf();
+		}
+		return false;
 	}
 	function joqularMatch(pattern,aliases,scope) {
 		scope || (scope = [this]);
@@ -350,76 +436,26 @@
 					return pattern[key](me);
 				}
 				var value1 = toObject(me[key]), type1 = getIntrinsicType(value1), value2s = [], value2;
-				if(value1!==undefined) {
-					value2 = dereference(pattern[key],aliases);
+				if(value1===undefined) {
+					return false;
+				}
+
+					var deref = dereference(pattern[key],aliases,scope);
+					value2 = deref.value;
 					if(value2===dereference.ignore) {
 						return true;
 					}
 					if(value2===undefined) {
 						return false;
 					}
-					value2s.push(value2);
-					return value2s.every(function(value2) {
-						var type2 = getIntrinsicType(value2);
-						if(value2!=null &&  (type2==="object" || type2==="function")) {
-							if(type2==="function" && value2.deferred) {
-								value2 = value2(value1);
-								type2 = getIntrinsicType(value2);
-							} else {
-								var path;
-								var possiblepath = Object.keys(value2)[0];
-								if(possiblepath) {
-									var anchor = null;
-									if(possiblepath.indexOf("/")===0) {
-										anchor = scope[0];
-										path = possiblepath.substring(1).split(".");
-										if(path[0]==="") {
-											path.shift();
-										}
-									} else if(possiblepath.indexOf("..")===0) {
-										if(scope.length-2<0) { return false; }
-										anchor = scope[scope.length-2];
-										path = possiblepath.substring(2).split(".");
-										if(path[0]==="") {
-											path.shift();
-										}
-									} else if(possiblepath.indexOf(".")===0) {
-										if(scope.length-1<0) { return false; }
-										anchor = scope[scope.length-1];
-										path = possiblepath.substring(1).split(".");
-										if(path[0]==="") {
-											path.shift();
-										}
-									}
-									if(anchor) {
-										path.push(value2[possiblepath]);
-										for(var i=0;i<path.length;i++) {
-											anchor = anchor[path[i]];
-											if(anchor===undefined) {
-												return false;
-											}
-										}
-										value2 = anchor;
-									}
-								}
-							}
-						}
-						//if(key==="@" && value1 instanceof Object) {
-						//	if(value1.history instanceof History) {
-						//		return value1.history.joqularMatch(value2);
-						//	}
-						//	return false;
-						//}
-						return (value1===value2 || 
-							(value1!=null && value1.valueOf()===value2) ||
-							(value2!=null && value1===value2.valueOf()) || 
-							(value1!=null && value2!=null && value1.valueOf()===value2.valueOf()) ||
-							(type1==="function" && value1.predicate && value1.call(me,(value2!=null ? value2.valueOf() : value2))) ||
-							(type1==="function" && value1.provider && value1.call(me)===(value2!=null ? value2.valueOf() : value2)) ||
-							(type1!=="function" && (type1!==type2 || type2==="object") && value1.joqularMatch && value1.joqularMatch(value2,aliases,scope.concat([me]))));
-					});
-				}
-				return false;
+					var type2 = getIntrinsicType(value2);
+					return (!deref.test && value1===value2 || 
+						(!deref.test && value1.valueOf()===value2.valueOf()) ||
+						(typeof(value1[deref.test])==="function" && value1[deref.test].call(value1,value2)) ||
+						(type2==="function" && value2(value1)) ||
+						(type1==="function" && value1.predicate && value1.call(me,(value2!=null ? value2.valueOf() : value2))) ||
+						(type1==="function" && value1.provider && providerTest(value1.call(me),value2,deref.test,aliases)) ||
+						(type1!=="function" && typeof(value1[deref.test])!=="function" && (type1!==type2 || type2==="object") && value1.joqularMatch && joqularMatch.call(value1,value2,aliases,scope.concat([me]))));
 			})) {
 				return this;
 			}
@@ -427,482 +463,640 @@
 		}
 		return null;
 	};
-	function joqularValues(scope,type) {
-		if(!scope || !scope[type]) {
-			return [];
-		}
-		if(!scope[type].joqularValues) {
-			var values = Object.keys(scope[type]);
-			switch(type) {
-			case "number": values.forEach(function(value,i) { if(value!=="joqularValues") { values[i] = parseFloat(value); }}); values.sort(function(a,b) { return a - b; }); break;
-			case "boolean": values.forEach(function(value,i) { if(value!=="joqularValues") { values[i] = (value==="true"); }}); values.sort(); break;
-			case "string": values.sort(); break;
-			case "undefined": values = [null]; break;
-			}
-			Object.defineProperty(scope[type],"joqularValues",{enumerable:false,configurable:true,writable:true,value:values});
-		}
-		return scope[type].joqularValues;
+	// {name: "Simon"}
+	// {name: {String: "Simon", ids: {}}}
+	// pattern: {name: "Simon"}
+	// {name: "Simon", address: {zipcode: 98110}}
+	// {name: {String: "Simon"}, address: {Object: {zipcode: {Number: 98110}}}}
+	function Ids() {
+		
 	}
-	function joqularIndexValue(id,value,index,key,type) {
-		index[key] || (index[key] = {});
-		index[key][type] || (index[key][type] = {});
-		index[key][type][value] || (index[key][type][value] = {});
-		index[key][type][value][id] = 1;
-		delete index[key][type].joqularValues; // remove cached values, they will be regenerated by first query
+	function Key() {
+		
 	}
-	function joqularIndexFunction(id,func,index,key) {
-		if(func.predicate || func.provider) {
-			index["function"] || (index["function"] = {});
-			(index["function"][key] && typeof(index["function"][key])!=="function") || (index["function"][key] = {}); // index is a dumb object, so if there is a function, ok to overwrite
-			index["function"][key][id] = 1;
-		}
+	function Kind() {
+		this.joqularIdMap = new Ids();
+		this.forgeinIds = {};
 	}
-	function joqularIndex(id,instance,index,blockObserve) {
-		blockObserve = (blockObserve===undefined ? false : blockObserve);
-		var constructor = this;
-		if(instance==null || typeof(instance)==="function") {
-			return;
-		}
-		if(!blockObserve) {
-			Object.observe(instance,function(changes) { 
-				joqularUpdate.call(constructor,id,changes,index);
-			});
-		}
-		var instancetype = typeof(instance.valueOf());
-		var keys = Object.getOwnPropertyNames(instance);
-		keys = keys.concat(Object.getOwnPropertyNames(Object.getPrototypeOf(instance)));
-		keys = keys.filter(function(key) {
-			if(key==="__proto__") {
-				return false;
-			}
-			var value = instance[key], type = typeof(value);
-			if(type==="function") {
-				return value.predicate || value.provider;
-			}
-			if(instancetype==="string") {
-				return isNaN(parseInt(key));
-			}
-			return true;
-		});
-		keys.forEach(function(key) {
-			var value = instance[key], type;
-			if(value!==undefined) {
-				if(value===null) {
-					type = "undefined";
-				} else {
-					value = value.valueOf();
-					type = typeof(value);
-				}
-				if(type==="function") {
-					joqularIndexFunction.call(constructor,id,value,index,key);
-				} else if(value!=null && type==="object" && instance===instance.valueOf()){ // instance!==instance.valueOf() for primitive types, need this to stop recursion
-					index[key] || (index[key] = {});
-					joqularIndex.call(constructor,id,value,index[key]);
-				} else if(value===null || type!=="object") {
-					index[key] || (index[key] = {});
-					joqularIndex.call(constructor,id,toObject(value),index[key],true);
-				}
-				if(value===null) {
-					type = "undefined";
-				}
-				if(["number","boolean","string","undefined"].indexOf(type)>=0) {
-					joqularIndexValue.call(constructor,id,value,index,key,type);
-				}
-			}
-		});
-	}
-	function joqularUpdate(id,changes,index) {
-		var constructor = this;
-		changes.forEach(function(change) {
-			var key = change.name, value = change.object[key];
-			if(change.type==="update" || change.type==="delete") {
-				var type = typeof(change.oldValue);
-				if(change.oldValue instanceof Object) {
-					joqularDelete.call(constructor,id,change.oldValue,index[key]);
-				} else if(index[key][type][change.oldValue]) {
-					delete index[key][type][change.oldValue][id];
-				}
-			}
-			if(change.type==="add") {
-				index[key]={};
-			}
-			if(change.type==="update" || change.type==="add") {
-				var value = change.object[key],type = typeof(value);
-				if(value instanceof Object) {
-					if(type==="function") {
-						joqularIndexFunction.call(constructor,value,index,key);
-					} else {
-						joqularIndex.call(constructor,id,value,index[key]);
-					}
-				} else {
-					joqularIndexValue.call(constructor,id,value,index,key,type)
-				}
-			}
-			return;
-		});
-	}
-	function joqularDelete(id,instance,index) {
-		var constructor = this;
-		if(index) {
-			var keys = Object.keys(instance);
+	Kind.prototype.getValues = function(kind) {
+		var me = this;
+		if(!me.joqularValues) {
+			var values = [], keys = Object.keys(me);
 			keys.forEach(function(key) {
-				if(index[key]) {
-					var value = instance[key], type = typeof(value);
-					if(value instanceof Object) {
-						joqularDelete.call(constructor,value,index[key]);
-					} else if(index[key][type] && index[key][type][value]){
-						delete index[key][type][value][id];
+				if(key==="Functions" || key==="joqularIdMap" || key==="joqularId" || key==="forgeinIds") {
+					return;
+				}
+				var value;
+				switch(kind) {
+					case "Boolean": value = (key==="true" ? true : false); values.push(value); break;
+					case "Number": value = parseFloat(key); values.push(value); break;
+					case "String": value = key; values.push(value); break;
+					case "Null": value = null; values.push(value); break;
+					// index find will assume any other types must be tested during instance match cycle
+				};
+			});
+			if(kind==="Number") {
+				values.sort(function(a,b) { return a - b; });
+			} else {
+				values.sort();
+			}
+			me.joqularValues = values;
+		}
+		return me.joqularValues;
+	}
+	Kind.prototype.getIds = function() {
+		if(!this.joqularIds) {
+			Object.defineProperty(this,"joqularIds",{enumerable:false,configurable:true,writable:true,value:Object.keys(this.joqularIdMap)});
+		}
+		return this.joqularIds;
+	}
+	Kind.prototype.find = function(index,value,results,scopes,scopekey,scopekind) {
+		var me = this, testvalue = value.valueOf(), kindname = value.constructor.name, pass = [], instancevalues, instancevalue;
+		if(!me[scopekey]) {
+			results.splice(0,results.length);
+			return false;
+		}
+		if(kindname==="Function") {
+			var kindnames = Object.keys(me[scopekey]);
+			kindnames.forEach(function(kindname) {
+				if(value===FindPattern.prototype.defined) {
+					pass = pass.concat(me[scopekey][kindname].getIds());
+				} else {
+					instancevalues = me[scopekey][kindname].getValues(kindname);
+					if(value.test==="every") {
+						if(["Boolean","Number","String","Null"].indexOf(kindname)===-1) {
+							pass = pass.concat(me[scopekey][kindname].getIds());
+						} else {
+							instancevalues.every(function(instancevalue) {
+								instancevalue = new Object.joqularIndexes[kindname](instancevalue).valueOf();
+								if(value(instancevalue)) {
+									pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
+									return true;
+								}
+								return false;
+							});
+						}
+					} else if(value.test==="some") {
+						if(["Boolean","Number","String","Null"].indexOf(kindname)===-1) {
+							pass = pass.concat(me[scopekey][kindname].getIds());
+						} else {
+							instancevalues.some(function(instancevalue) {
+								instancevalue = new Object.joqularIndexes[kindname](instancevalue).valueOf();
+								if(value(instancevalue)) {
+									pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
+									return true;
+								}
+								return false;
+							});
+						}
+					} else {
+						if(["Boolean","Number","String","Null"].indexOf(kindname)===-1) {
+							pass = pass.concat(me[scopekey][kindname].getIds());
+						} else {
+							instancevalues.forEach(function(instancevalue) {
+								(kindname==="Number" && isNaN(instancevalue)) || (instancevalue = new Object.joqularIndexes[kindname](instancevalue).valueOf());
+								if(value(instancevalue)) {
+									pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
+								}
+							});
+						}
 					}
 				}
-			});
-		}
-	}
-	function joqularFind(pattern,index,aliasnames,rootpattern,results,scopes,scopekeys,out) {
-		if(pattern==null || index==null) return [];
-		rootpattern || (rootpattern = pattern);
-		out || (out = {});
-		var constructor = this, keys = Object.keys(pattern), scope = (scopes ? scopes[0] : this), direct = false;
-		if(pattern instanceof Date) keys.push("time");
-		if(keys.length===0 && (pattern.constructor==={}.constructor || (pattern.constructor===constructor))) {
-			results = [];
-			Object.keys(constructor.ids).forEach(function(id) {
-				if(id!=="nextId") {
-					results.push(constructor.ids[id]);
-				}
-			});
-			return results;
-		}
-		keys.every(function(key) {
-			if(aliasnames && aliasnames.indexOf(key)>=0) {
-				if(!results) {
-					results = [];
-					var ids = Object.keys(constructor.ids);
-					ids.forEach(function(id) {
-						if(id!="nextId" && !out[id]) {
-							if(constructor.ids[id].joqularMatch(rootpattern,aliasnames)) {
-								results.push(constructor.ids[id]);
-								return;
-							}
-							out[id] = true;
-						}
+			}); 
+		} else if(["Boolean","Number","String","Null"].indexOf(kindname)>=0) {
+			if(value.test) {
+				if(!me[scopekey][kindname] && value.test==="neq") {
+					var kindnames = Object.keys(me[scopekey]);
+					kindnames.forEach(function(kindname) {
+						pass = pass.concat(me[scopekey][kindname].getIds());
 					});
-					return results.length > 1
-				}
-				return true;
-			}
-			var value = pattern[key], type, matches = [], firstsubkey, subisref = false, scopekey = (scopekeys ? scopekeys[0] : key);
-			
-			if(value === null) {
-				type = "undefined";
-			} else {
-				value = value.valueOf();
-				type = typeof(value);
-			}
-			if(index[key] && index[key][type] && index[key][type][value]) {
-				var ids = Object.keys(index[key][type][value]);
-				ids.forEach(function(id) {
-					if(out[id]) return;
-					if(constructor.ids[id]) {
-						if(constructor.ids[id].joqularMatch(rootpattern,aliasnames)) {
-							matches.push(constructor.ids[id]);
+				} else if(me[scopekey][kindname]) {
+					instancevalues = me[scopekey][kindname].getValues(kindname);
+					switch(value.test) {
+						// do optimized tests against sorted values from index
+						case "lt":
+							for(var i=0;i<instancevalues.length;i++) {
+							 	instancevalue = new value.constructor(instancevalues[i]==="false" ? false : instancevalues[i]).valueOf()
+								if(instancevalue < testvalue) {
+									pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
+									continue;
+								}
+								break;
+							};
+							break;
+						case "lte":
+							for(var i=0;i<instancevalues.length;i++) {
+							 	instancevalue = new value.constructor(instancevalues[i]==="false" ? false : instancevalues[i]).valueOf()
+								if(instancevalue <= testvalue) {
+									pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
+									continue;
+								}
+								break;
+							};
+							break;
+						case "eq": 
+							var i = instancevalues.bsearch(testvalue)[0];
+							if(i>=0) {
+								pass = pass.concat(me[scopekey][kindname][testvalue].getIds());
+							};
+							break;
+						case "neq":
+							instancevalues.forEach(function(instancevalue) {
+								if(instancevalue !== testvalue) {
+									pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
+								}
+							});
+							break;
+						case "gte":
+							for(var i=instancevalues.length-1;i>=0;i--) {
+							 	instancevalue = new value.constructor(instancevalues[i]==="false" ? false : instancevalues[i]).valueOf()
+								if(instancevalue >= testvalue) {
+									pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
+									continue;
+								}
+								break;
+							};
+							break;
+						case "gt":
+							for(var i=instancevalues.length-1;i>=0;i--) {
+							 	instancevalue = new value.constructor(instancevalues[i]==="false" ? false : instancevalues[i]).valueOf()
+								if(instancevalue > testvalue) {
+									pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
+									continue;
+								}
+								break;
+							};
+							break;
+						// do un-optimized tests
+						default:
+							if(Object.joqularIndexes[kindname] && Object.joqularIndexes[kindname].index.keys[value.test] && Object.joqularIndexes[kindname].index.keys[value.test].Function) {
+								instancevalues.forEach(function(instancevalue) {
+									instancevalue = new Object.joqularIndexes[kindname](instancevalue);
+									if(instancevalue[value.test](value)) {
+										pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
+									}
+								});
+							}
+					}
+				} else { // get the objects that support the type of test requested
+					var kindnames = Object.keys(me[scopekey]);
+					kindnames.forEach(function(kindname) {
+						if(["Boolean","Number","String","Null"].indexOf(kindname)>=0) {
 							return;
 						}
-						out[id] = true;
+						if(Object.joqularIndexes[kindname] && Object.joqularIndexes[kindname].index.keys[value.test] && Object.joqularIndexes[kindname].index.keys[value.test].Function) {
+							pass = pass.concat(me[scopekey][kindname].getIds());
+						}
+					});
+				}
+			} else if(me[scopekey] && me[scopekey][kindname] && me[scopekey][kindname][testvalue]) { // test for direct matches
+				pass = me[scopekey][kindname][testvalue].getIds();
+			}
+		// collect everything that supports the test being requested
+		} else if(value.test) {
+			var kindnames = Object.keys(me[scopekey]);
+			kindnames.forEach(function(kindname) {
+				if(Object.joqularIndexes[kindname] && Object.joqularIndexes[kindname].index.keys[value.test] && Object.joqularIndexes[kindname].index.keys[value.test].Function) {
+					pass = pass.concat(me[scopekey][kindname].getIds());
+				}
+			});
+		// walk other object
+		} else if(me[scopekey][kindname] && me[scopekey][kindname].forgeinIds && Object.joqularIndexes[kindname]) {
+			var fids = Object.keys(me[scopekey][kindname].forgeinIds);
+			var subresults = Object.joqularIndexes[kindname].index.find(value,fids,scopes,scopekey);
+			if(subresults.length>0) {
+				pass = pass.concat(me[scopekey][kindname].getIds());
+			}
+		// walk keys and sub-objects
+		} else if(kindname==="Pattern") {
+			var keys = Object.keys(value);
+			if(keys.every(function(key) {
+				if(me[key] instanceof Key) {
+					return me.find(index,value[key],pass,scopes,key,value[key].constructor.name);
+				}
+				return true;
+			})) {
+				// look in child objects in case key was not present
+				var kindnames = Object.keys(me[scopekey]);
+				kindnames.forEach(function(kindname) {
+					if(me[scopekey][kindname].forgeinIds && Object.joqularIndexes[kindname]) {
+						var fids = Object.keys(me[scopekey][kindname].forgeinIds);
+						var subresults = Object.joqularIndexes[kindname].index.find(value,fids,scopes,scopekey);
+						if(subresults.length>0) {
+							pass = pass.concat(me[scopekey][kindname].getIds());
+						}
+					}
+				});
+			}
+		}
+		if(pass.length===0) {
+			results.splice(0,results.length);
+			return false;
+		}
+		results.index = true;
+		var tmp = (results.length>0 ? intersection(results,pass) : pass);
+		results.splice.apply(results,[0,results.length].concat(tmp));
+		return results.length>0;
+	}
+	function Value() {
+		this.joqularIdMap = new Ids();
+	}
+	Value.prototype.getIds = function() {
+		if(!this.joqularIds) {
+			this.joqularIds = Object.keys(this.joqularIdMap);
+		}
+		return this.joqularIds;
+	}
+	function Method() {
+		this.joqularIdMap = new Ids();
+	}
+	Method.prototype.getIds = function() {
+		if(!this.joqularIds) {
+			this.joqularIds = Object.keys(this.joqularIdMap);
+		}
+		return this.joqularIds;
+	}
+	function Pattern(init) {
+		for(var key in init) {
+			this[key] = init[key];
+		}
+	}
+	function FindPattern(pattern,aliases) {
+		this.compile(pattern,aliases);
+	}
+	FindPattern.prototype = new Pattern();
+	FindPattern.prototype.defined = function(value) {
+		return value!==undefined
+	}
+	FindPattern.prototype.compile = function(pattern,aliases,scope) {
+		scope || (scope = this);
+		var me = this, keys = Object.keys(pattern);
+		keys.forEach(function(key) {
+			if(key==="$forall" || key==="$exists") {
+				return; // should only exist at top level, perhaps alias with every and exists and ih=gnore at top level?
+			}
+			if(key.indexOf("$$")===0) {
+				return;
+			}
+			var value = pattern[key], type = typeof(value); 
+			value = toObject(value);
+			if(value.valueOf()!=null && type==="object") {
+				if(value instanceof Array) {
+					scope[key] = value;
+				} else {
+					var possibletest = Object.keys(value)[0];
+					if(possibletest && (["$$"].indexOf(possibletest)>=0 || possibletest.indexOf("/")===0 || possibletest.indexOf(".")===0)) {
+						value = me.defined;
+						scope[key] = value; // just ensure key defined, leave resolution until final match, i.e. don't do in the index find, do against preliminary results 
+					} else if(possibletest && possibletest.indexOf("$")===0) {
+						value = toObject(value[possibletest]);
+						Object.defineProperty(value,"test",{enumerable:false,configurable:true,writable:true,value:possibletest.substring(1)});
+						scope[key] = value;
+					} else if(!(value instanceof Date) && Object.keys(value).length===0) { // handle keyless objects like Sets
+						value = me.defined;
+						scope[key] = value; // handle outside of index
+					} else if(typeof(me[possibletest])==="function") {
+						var f = value[possibletest];
+						value = function() {
+							return me[possibletest](f,index,results,scope,scopekey,scopekind);
+						}
+						scope[key] = value;
 					} else {
-						delete index[key][type][value][id];
+						scope[key] = new Pattern();
+						me.compile(value,aliases,scope[key]);
 					}
-				});
-				direct = true;
-				results = (results ? intersection(results,matches) : matches);
-				return results.length > 0;
-			}
-			if(type==="object") {
-				firstsubkey = Object.keys(value)[0];
-				// tag path references
-				subisref = (firstsubkey && (firstsubkey.indexOf("/")===0 || firstsubkey.indexOf(".")===0));
-				value = dereference(value,aliasnames);
-				if(value===dereference.ignore) {
-					return true;
 				}
-				if(value===undefined) {
-					return false;
-				}
+			} else {
+				Object.defineProperty(value,"test",{enumerable:false,configurable:true,writable:true,value:"eq"});
+				scope[key] = value;
 			}
-			if(type!=="object" && type!=="function" && ["lt","lte","eq","neq","gte","gt"].indexOf(key)>=0) {
-				var test = key;
-				// ugh, table scan because there are no records selected yet and there might be a null value in the database
-				if(test==="neq" && !results) {
-					results = [];
-					var ids = Object.keys(constructor.ids);
-					ids.forEach(function(id) {
-						if(id!="nextId" && !out[id]) {
-							if(constructor.ids[id].joqularMatch(rootpattern,aliasnames)) {
-								results.push(constructor.ids[id]);
-								return;
-							}
-							out[id] = true;
-						}
-					});
-					direct = true;
-					return results.length > 1;
-				}
-				var types = (type==="undefined" ? ["string","number","boolean","undefined"] : [type]);
-				types.forEach(function(type) {
-					var values = joqularValues(scope[scopekey],type), ids = [];
-					if(values.length===0) return;
-					// instance values are in ascending order so we can do some optimizations
-					if(test==="eq") {
-						var i = values.bsearch(value)[0];
-						if(i>=0) {
-							var instancevalue = values[i];
-							ids = Object.keys(scope[scopekey][type][instancevalue]);
-						}
-					} else if(["lt","lte","neq"].indexOf(test)>=0) {
-						for(var i=0;i<values.length;i++) {
-							var instancevalue = values[i];
-							if(test==="lt") {
-								if(instancevalue < value) {
-									ids = ids.concat(Object.keys(scope[scopekey][type][instancevalue]));
-									continue;
-								}
-								break;
-							} else if(test==="lte") {
-								if(instancevalue <= value) {
-									ids = ids.concat(Object.keys(scope[scopekey][type][instancevalue]));
-									continue;
-								}
-								break;
-							} else { //neq
-								if(instancevalue !== value) {
-									ids = ids.concat(Object.keys(scope[scopekey][type][instancevalue]));
-								}
-								continue;
-							}
-						}
-					} else { // gte, gt}
-						for(var i=values.length-1;i>=0;i--) {
-							var instancevalue = values[i];
-							if(test==="gte") {
-								if(instancevalue >= value) {
-									ids = ids.concat(Object.keys(scope[scopekey][type][instancevalue]));
-									continue;
-								}
-								break;
-							} else if(test==="gt") {
-								if(instancevalue > value) {
-									ids = ids.concat(Object.keys(scope[scopekey][type][instancevalue]));
-									continue;
-								}
-								break;
-							}
-						}
-					}
-					ids.forEach(function(id) {
-						if(out[id]) return;
-						if(constructor.ids[id]) {
-							if(constructor.ids[id].joqularMatch(rootpattern,aliasnames)) {
-								matches.push(constructor.ids[id]);
-								return;
-							}
-							out[id] = true;
-						} else {
-							delete scope[scopekey][type][instancevalue][id];
-						}
-					});
-				});
-				direct = true;
-				results = (results ? intersection(results,matches) : matches);
-				return results.length > 0;
-			}
-			if(key==="forall" && type=="function") {
-				direct = true;
-				var ids = Object.keys(constructor.ids);
-				if(ids.every(function(id) {
-					if(id==="nextId" || out[id]) return true;
-					if(value(constructor.ids[id])) {
-						matches.push(constructor.ids[id]);
-						return true;
-					}
-					out[id] = true;
-					return false;
-				})) {
-					results = (results ? intersection(results,matches) : matches);
-					return results.length > 0;
-				}
-				matches = [];
-				results = [];
-				return false;
-			}
-			if(key==="exists" && type=="function") {
-				direct = true;
-				if(results) {
-					if(results.some(function(object) {
-						return value(object);
-					})) {
-						return results.length > 0;
-					}
-					matches = [];
-					results = [];
-					return false;
-				} else {
-					var ids = Object.keys(constructor.ids);
-					if(ids.some(function(id) {
-						if(id==="nextId" || out[id]) return false;
-						return value(constructor.ids[id]);
-					})) {
-						ids.forEach(function(id) {
-							if(id==="nextId") return;
-							matches.push(constructor.ids[id]);
-						});
-						results = matches;
-						return results.length > 0;
-					}
-					matches = [];
-					results = [];
-					return false;
-				}
-			}
-			if(key==="$$" && type==="function") {
-				direct = true;
-				var f = value;
-				if(results) {
-					results = results.filter(function(object) { return value.call(object); })
-					return results.length > 0;
-				} else {
-					["string","number","boolean","undefined"].forEach(function(type) {
-						var values =  joqularValues(scope[scopekey],type);
-						values.forEach(function(value) {
-							var ids = Object.keys(scope[scopekey][type][value]);
-							ids.forEach(function(id) {
-								if(id!="nextId" && !out[id]) {
-									if(constructor.ids[id]) {
-										if(f.call(constructor.ids[id]) && constructor.ids[id].joqularMatch(rootpattern,aliasnames)) {
-											matches.push(constructor.ids[id]);
-											return;
-										}
-										out[id] = true;
-									} else {
-										delete scope[scopekey][type][value][id];
-									}
-								}
-							});
-						});
-					});
-					results = (results ? intersection(results,matches) : matches);
-					return results.length > 0;
-				}
-			}
-			if(key==="$" && type==="function") {
-				direct = true;
-				var f = value;
-				["string","number","boolean","undefined"].forEach(function(type) {
-					var values =  joqularValues(scope[scopekey],type);
-					values.forEach(function(value) {
-						if(f(value)) {
-							var ids = Object.keys(scope[scopekey][type][value]);
-							ids.forEach(function(id) {
-								if(id!="nextId" && !out[id]) {
-									if(constructor.ids[id]) {
-										if(constructor.ids[id].joqularMatch(rootpattern,aliasnames)) {
-											matches.push(constructor.ids[id]);
-											return;
-										}
-										out[id] = true;
-									} else {
-										delete scope[scopekey][type][value][id];
-									}
-								}
-							});
-						}
-					});
-				});
-				results = (results ? intersection(results,matches) : matches);
-				return results.length > 0;
-			}
-			if((subisref || key.indexOf("/")===0 || key.indexOf(".")===0)) {
-				if(!results) {
-					results = [];
-					var ids = Object.keys(constructor.ids);
-					ids.forEach(function(id) {
-						if(id!="nextId") {
-							if(constructor.ids[id].joqularMatch(rootpattern,aliasnames)) {
-								results.push(constructor.ids[id]);
-								return;
-							}
-							out[id] = true;
-						}
-					});
-				} else {
-					results = results.filter(function(object) {
-					return object.joqularMatch(rootpattern,aliasnames);
-					});
-				}
-				direct = true;
-				return results.length > 0;
-			}
-			if(scope[scopekey] && scope[scopekey]["function"] && scope[scopekey]["function"][key]) {
-				var ids = Object.keys(scope[scopekey]["function"][key]);
-				ids.forEach(function(id) {
-					if(!out[id] && constructor.ids[id]) {
-						var i = scopekeys.length-1, object = constructor.ids[id];
-						while(i>0) {
-							object = object[scopekeys[i]];
-							if(!object) return;
-							i--;
-						}
-						var instancevalue = object[scopekeys[i]];
-						if(instancevalue && typeof(instancevalue[key])==="function") {
-							if(instancevalue[key].provider) {
-								if(instancevalue[key]()===value) {
-									if(constructor.ids[id].joqularMatch(rootpattern,aliasnames)) {
-										matches.push(constructor.ids[id]);
-										return;
-									}
-									out[id] = true;
-								}
-							} else if(instancevalue[key](value)) { // otherwise we know it is a predicate
-								if(constructor.ids[id].joqularMatch(rootpattern,aliasnames)) {
-									matches.push(constructor.ids[id]);
-									return;
-								}
-								out[id] = true;
-							}
-						}
-					} else {
-						delete scope[scopekey]["function"][key][id];
-					}
-				});
-				direct = true;
-				// not finalizing results here is intentional, there may be non-function oriented but same named matches
-			}
-			if(type==="object") {
-				scopes || (scopes = []);
-				scopes.unshift(index);
-				scopekeys || (scopekeys = []);
-				scopekeys.unshift(key);
-				var submatches = joqularFind.call(constructor,pattern[key],index[key],aliasnames,rootpattern,results,scopes,scopekeys,out);
-				direct = submatches.direct;
-				scopes.shift();
-				scopekeys.shift();
-				matches = matches.concat(submatches);
-			}
-			results = (results ? intersection(results,matches) : matches);
-			return results.length > 0;
 		});
-		if(!results) {
-			results = [];
-			results.direct = direct;
+	}
+	function MatchPattern(pattern,literals,aliases) {
+		this.compile(pattern,literals,aliases);
+	}
+	MatchPattern.prototype = new Pattern();
+	MatchPattern.prototype.compile = function(pattern,literals,aliases,scope) {
+		scope || (scope = this);
+		var me = this, keys = Object.keys(pattern), isfunction = false;
+		keys.forEach(function(key) {
+			if(key==="$forall" || key==="$exists") {
+				return; // not relevant for object matching
+			}
+			var value = pattern[key], type = typeof(value); 
+			if(key!=="$$" && key.indexOf("$")===0 && key.length>1) {
+				key = key.substring(1);
+				isfunction = true;
+			}
+			if(type==="function" || key.indexOf("..")===0 || key.indexOf("/")===0) {
+				scope[key] = value;
+			} else if(value!=null && type==="object") {
+				var possibletest = Object.keys(value)[0];
+				if(value[possibletest] && typeof(value[possibletest])==="object" && aliases) {
+					var possiblealias = Object.keys(value[possibletest])[0];
+					// arrays can't be tests and may actually exist to contain function arguments
+					if(!(value[possibletest] instanceof Array) && aliases[possiblealias] || (aliases.indexOf && aliases.indexOf(possiblealias)>=0)) {
+						return;
+					}
+				}
+				if(["$lt","$lte","$eq","$neq","$gte","$gt"].indexOf(possibletest)>=0) {
+					// ignore tests on primtives which were handled by index
+					if(["Boolean","Number","String","Null"].indexOf(value.constructor.name)===-1) {
+						var v = {};
+						v[possibletest.substring(1)] = value[possibletest];
+						scope[key] = v;
+					}
+				} else if(value.constructor.name!=="Object") {
+					scope[key] = value;
+				} else {
+					scope[key] = {};
+					me.compile(value,literals,aliases,scope[key]);
+				}
+			} else if(isfunction || literals){
+				scope[key] = (value ? value.valueOf() : value);
+			}
+		});
+	}
+	function Index(kindName) {
+		this.joqularIdMap = new Ids();
+		this.keys = new Kind();
+		this.nextId = 0;
+		this.kindName = kindName;
+	}
+	Index.prototype.getIds = function() {
+		if(!this.joqularIds) {
+			this.joqularIds = Object.keys(this.keys.joqularIdMap);
+		}
+		return this.joqularIds;
+	}
+	Index.prototype.index = function(instance) {
+		var me = this, id, kind = me.keys, value, type, kindname = instance.constructor.name;
+		if(["Boolean","Number","String","Null"].indexOf(kindname)===-1) {
+			if(instance.joqularId==null) {
+				id = me.nextId++;
+				instance.joqularId = id;
+			} else {
+				id = instance.joqularId;
+			}
+			me.keys.joqularIdMap[id] = instance;
+			Object.observe(instance,function(changes) {
+				me.update(instance.joqularId,changes);
+			});
+		}
+		for(var key in instance) {
+			if(kindname==="String" && typeof(instance[key])==="string") continue; 
+			value = instance[key];
+			value = toObject(value); 
+			if(value===undefined) continue;
+			kindname = value.constructor.name, type = typeof(value.valueOf());
+			if(instance[key]===null) type = "undefined";
+			Object.joqularIndexes[kindname] || (Object.joqularIndexes[kindname] = value.constructor);
+			Object.joqularIndexes[kindname].index || (Object.joqularIndexes[kindname].index = new Index(kindname));
+			kind[key] || (kind[key] = new Key());
+			kind[key][kindname] || (kind[key][kindname] = new Kind());
+			if(id!=null) {
+				kind[key][kindname].joqularIdMap[id] = 1;
+			}
+			if(["Boolean","Number","String","Null"].indexOf(kindname)>=0) {
+				kind[key][kindname][value.valueOf()] || (kind[key][kindname][value.valueOf()] = new Value());
+				kind[key][kindname][value.valueOf()].joqularIdMap[id] = 1;
+				(kindname==="Number" && isNaN(value)) || Object.joqularIndexes[kindname].index.index(value);
+			} else if(kindname!==me.kindName || value.joqularId!==id){
+				if(value.joqularId==null) {
+					Object.joqularIndexes[kindname].index.index(value);
+				}
+				kind[key][kindname].forgeinIds[value.joqularId] = id; 
+			}
+		}
+		if(instance instanceof Array) {
+			kind.length!=null || (kind.length = new Key());
+			kind.length.Number || (kind.length.Number = new Kind());
+			kind.length.Number[instance.length] || (kind.length.Number[instance.length] = new Value());
+			kind.length.Number[instance.length].joqularIdMap[id] = 1;
+			kind.length.Number.joqularIdMap[id] = 1;
+		}
+	}
+	Index.prototype.update = function(id,changes) {
+		var me = this, kind = this.keys;
+		changes.forEach(function(change) {
+			var key = change.name, value = toObject(change.object[key]), kindname = value.constructor.name, type = typeof(change.object[key]);
+			if(change.type==="update" || change.type==="delete") {
+				var oldvalue = toObject(change.oldValue), oldkindname = oldvalue.constructor.name, oldtype = typeof(change.oldValue);
+				if(change.oldValue!==null && oldtype==="object") {
+					delete kind[key][oldkindname].forgeinIds[oldvalue.joqularId]; 
+				} else if(kind[key][oldkindname][change.oldValue].joqularIdMap[id]) {
+					delete kind[key][oldkindname][change.oldValue].joqularIdMap[id]; // delete reference from index
+					delete kind[key][oldkindname][change.oldValue].joqularIds; // delete cached id list
+				}
+			}
+			kind[key] || (kind[key] = new Key());
+			kind[key][kindname] || (kind[key][kindname] = new Kind());
+			if(change.type==="update" || change.type==="add") {
+				if(type==="object" && value!=null) {
+					if(value.joqularId===null) {
+						Object.joqularIndexes[kindname] || (Object.joqularIndexes[kindname] = value.constructor);
+						Object.joqularIndexes[kindname].index || (Object.joqularIndexes[kindname].index = new Index(kindname));
+						Object.joqularIndexes[kindname].index.index(value);
+					}
+					kind[key][kindname].forgeinIds[value.joqularId]
+				} else {
+					kind[key][kindname][value.valueOf()] || (kind[key][kindname][value.valueOf()] = new Value());
+					kind[key][kindname][value.valueOf()].joqularIdMap[id] = 1;
+				}
+			}
+			return;
+		});
+	}
+	Index.prototype.find = function(pattern,aliases,scopes,scopekey) {
+		var me = this, findpattern = (pattern instanceof Pattern ? pattern : new FindPattern(pattern,aliases)), 
+		matchpattern = (pattern instanceof Pattern ? pattern : new MatchPattern(pattern,false,aliases)),
+		keys = Object.keys(findpattern), found = [], results = [];
+		if(scopes) {
+			scopes = [me.keys].concat(scopes);
+		} else {
+			scopes = [me.keys];
+		}
+		if(keys.every(function(key) {
+			return me.keys.find(me,findpattern[key],found,scopes,key,findpattern[key].constructor.name);
+		})) {
+			if(keys.length===0) {
+				found = me.getIds();
+				found.index = true;
+			}
+			results.index = found.index;
+			if(pattern.$forall && !found.every(function(id) {return pattern.$forall(me.keys.joqularIdMap[id]); })) {
+				return results;
+			}
+			if(pattern.$exists && !found.some(function(id) {return pattern.$exists(me.keys.joqularIdMap[id]); })) {
+				return results;
+			}
+			var matchlength = Object.keys(matchpattern).length;
+			found.forEach(function(id) {
+				var matchscopeid, matchscope;
+				if(scopekey && scopes[scopes.length-1][scopekey]) {
+					matchscopeid = scopes[scopes.length-1][scopekey][me.kindName].forgeinIds[id];
+					matchscope = [scopes[scopes.length-1].joqularIdMap[matchscopeid]];
+				}
+				if(matchlength===0 || joqularMatch.call(me.keys.joqularIdMap[id],matchpattern,aliases,matchscope)) {
+					results.push(me.keys.joqularIdMap[id]);
+				}
+			});
 		}
 		return results;
 	}
-	function Pattern(pattern) {
+	Index.prototype.clear = function(indexOnly,asynch) {
+		this.joqularIdMap = new Ids();
+		this.keys = new Kind();
+		this.nextId = 0;
+		var promise;
+		if(!indexOnly) {
+			promise = this.save(); // writes empty index since values reset above
+		} else {
+			promise = new Promise(function(resolve,reject) { resolve(); });
+		}
+		if(typeof(asynch)==="function") {
+			promise.then(function(count) {
+				asynch(null,count);
+			})["catch"](function(e) {
+				asynch(e);
+			});
+			return null;
+		}
+		return promise;
+	}
+	Index.prototype.flush = function(id) {
+		var me = this, ids;
+		if(id!=null) {
+			ids = [id];
+		} else {
+			ids = me.getIds();
+		}
+		ids.forEach(function(id) {
+			me.joqularIdMap[id] = 1;
+		});
+	}
+	Index.prototype.restore = function(id) {
+		var me = this, cons = Object.joqularIndexes[me.kindName], ids, results = {};
+		if(id!=null) {
+			ids = [id];
+		} else {
+			ids = me.getIds();
+		}
+		ids.forEach(function(id) {
+			var object = me.joqularIdMap[id];
+			if(!object) {
+				return;
+			}
+			if(object===1) {
+				object = Object.create(cons.prototype);
+				Object.defineProperty(object,"constructor",{enumerable:false,configurable:true,writable:true,value:cons});
+				object.__proto__ = cons.prototype;
+				var keys = Object.keys(me.keys);
+				keys.forEach(function(key) {
+					var kindnames = Object.keys(me.keys[key]);
+					kindnames.forEach(function(kindname) {
+							if(["Boolean","Number","String","Null"].indexOf(kindname)>=0) { // FUnction??
+								var values = me.keys[key][kindname].getValues(kindname);
+								values.forEach(function(value) {
+									if(me.keys[key][kindname][value].joqularIdMap[id]) {
+										switch(kindname) {
+										case "Boolean": object[key] = (value==="true" ? true : false); break;
+										case "Number": object[key] = parseFloat(value); break;
+										case "String" : object[key] = value; break;
+										case "Null" : object[key] = null;
+										}
+									}
+								});
+							} else {
+								// joqularRestore(object,cons.index[key][type]);
+							}
+						});
+				});
+				me.joqularIdMap[id] = object;
+				results[id] = object;
+			}	
+		});
+		return results;
+	}
+	function QueryPattern(pattern) {
 		this.value = pattern;
 	}
-	Pattern.prototype.toJSON = function() {
+	QueryPattern.prototype.toJSON = function() {
 		return this.value;
 	}
 	function Statement(projection) {
 		
+	}
+	function Insert() {
+
+	}
+	Insert.prototype = new Statement();
+	Insert.prototype.into = function(constructor) {
+		this.impacts = [constructor]; // an array so it is consistent with other statements
+		return this;
+	}
+	Insert.prototype.keys = function(keys) {
+		this.keyNames = keys;
+		this.insert = null;
+		return this;
+	}
+	Insert.prototype.values = function(values) {
+		this.keyValues = values;
+		this.insert = null;
+		return this;
+	}
+	Insert.prototype.object = function(object) {
+		this.insert = object;
+		this.keyNames = null;
+		this.keyValues = null;
+		return this;
+	}
+	Insert.prototype.exec = function(wait,persist) {
+		persist = (persist || persist==null ? true : false);
+		var me = this, constructor = me.impacts[0], object;
+		if(me.keyNames && me.keyValues) {
+			object = Object.create(constructor.prototype);
+			Object.defineProperty(object,"constructor",{enumerable:false,value:me.impacts[0]});
+			object.__proto__ = constructor.prototype;
+			me.keyNames.forEach(function(key,i) {
+				object[key] = me.keyValues[i];
+			});
+			constructor.joqularIndex(object);
+			if(persist) {
+				constructor.joqularSave();
+			}
+		} else if(me.insert) {
+			object = me.insert;
+			if(!(object instanceof me.impacts[0])) {
+				var object = Object.create(constructor.prototype);
+				Object.defineProperty(object,"constructor",{enumerable:false,value:me.impacts[0]});
+				//object.constructor = constructor;
+				object.__proto__ = constructor.prototype;
+				var keys = Object.keys(me.insert);
+				keys.forEach(function(key) {
+					object[key] = me.insert[key];
+				});
+			}
+			constructor.joqularIndex(object);
+			if(persist) {
+				constructor.joqularSave();
+			}
+		}
+		return object;
+	}
+	Insert.prototype.toJSON = function() {
+		var json = {};
+		json.into = this.impacts[0].name;
+		if(this.keyNames) {
+			json.keys = this.keyNames;
+		}
+		if(this.values) {
+			json.value = this.values;
+		}
+		if(this.object) {
+			json.object = this.object;
+		}
+		return {insert: json};
 	}
 	function Select(projection) {
 		this.projection = projection;
@@ -930,13 +1124,11 @@
 				}
 				var matches = me.aliases[aliasname].joqularFind(pattern,false,aliasnames);
 				if(matches.length===0) {
-					if(!matches.direct) {
+					if(!matches.index) {
 						matches = [];
-						var ids = Object.keys(me.aliases[aliasname].ids);
+						var ids = me.aliases[aliasname].index.getIds();
 						ids.forEach(function(id) {
-							if(id!="nextId") {
-								matches.push(me.aliases[aliasname].ids[id]);
-							}
+							matches.push(me.aliases[aliasname].index.keys.joqularIdMap[id]);
 						});
 					}
 					if(matches.length===0) {
@@ -984,7 +1176,7 @@
 								pattern = me.patterns[aliasname].value;
 							}
 							// match object to pattern, passing in aliases so that cross-references can be resolved
-							if(joqularMatch.call(object,pattern,aliases)) {
+							if(object.joqularMatch(pattern,aliases)) {
 								row[aliasname] = object;
 								return true;
 							}
@@ -1033,14 +1225,25 @@
 				if(me.projection) {
 					rows.forEach(function(row,i) {
 						var projection = {}, columns = Object.keys(me.projection);
+						var aliasnames = Object.keys(me.aliases);
 						columns.forEach(function(column) {
-							var reference = me.projection[column], aliasname = Object.keys(reference)[0], path = reference[aliasname].split(".");
-							var value = row[aliasname];
-							for(var i=0;i<path.length;i++) {
-								value = value[path[i]];
-								if(value===undefined) return;
-							}
-							projection[column] = value;
+							var reference = me.projection[column];
+							aliasnames.some(function(aliasname) {
+								if(reference[aliasname]) {
+									var path = reference[aliasname].split(".");
+									var value = row[aliasname];
+									for(var i=0;i<path.length;i++) {
+										value = value[path[i]];
+										if(value===undefined) return;
+									}
+									if(JOQULAR.format && reference.format) {
+										value = JOQULAR.format(refercen.format,value);
+									}
+									projection[column] = value;
+									return true;
+								}
+								return false;
+							});
 						});
 						rows[i] = [projection];
 					});
@@ -1129,10 +1332,10 @@
 		var aliases = Object.keys(me.aliases), patternaliases = Object.keys(patterns);
 		patternaliases.forEach(function(alias) {
 			if(aliases.indexOf(alias)>=0) {
-				me.patterns[alias] = new Pattern(patterns[alias]);
+				me.patterns[alias] = new QueryPattern(patterns[alias]);
 				return true;
 			}
-			throw new Error("The top level pattern " + JSON.stringify(new Pattern(patterns[alias])) + " does not refer to a class");
+			throw new Error("The top level pattern " + JSON.stringify(new QueryPattern(patterns[alias])) + " does not refer to a class");
 		});
 		return me;
 	}
@@ -1140,15 +1343,14 @@
 		this.ordering = ordering;
 		return this;
 	}
-	function joqularSelect(projection) {
-		return new Select(projection);
-	}
 	var JOQULAR = {
 			enhance: function(constructor,config) {
+				Object.joqularIndexes = {};
 				function createIndex(cons,auto,async,name) {
 					auto = (auto===undefined ? true : auto);
 					name || (name = cons.name);
 					var newcons = Function("root","cons","auto","async","return function " + name + "() {var me = this;if(!(me instanceof " + name + ")) { me = new " + name + "(); } cons.apply(me,arguments); Object.defineProperty(me,'constructor',{enumerable:false,value:" + name + "}); return (auto ? " + name + ".joqularIndex(me,async) : me); }")(constructor,cons,auto,async);
+					Object.joqularIndexes[name] = newcons;
 					var keys = Object.getOwnPropertyNames(constructor);
 					keys.forEach(function(key) {
 						try {
@@ -1165,34 +1367,11 @@
 							
 						}
 					});
-					newcons.ids = {};
-					newcons.ids.nextId = 0;
-					newcons.index = {};
-					newcons.indexing = {};
-					newcons.joqularClear = function(indexOnly,asynch) {
-						var count = Object.keys(newcons.ids).length-1;
-						newcons.ids = {};
-						newcons.ids.nextId = 0;
-						newcons.index = {};
-						var promise;
-						if(!indexOnly && newcons.joqularSave) {
-							promise = newcons.joqularSave();
-						} else {
-							promise = new Promise(function(resolve,reject) { resolve(); });
-						}
-						if(typeof(asynch)==="function") {
-							promise.then(function(count) {
-								asynch(null,count);
-							})["catch"](function(e) {
-								asynch(e);
-							});
-							return null;
-						}
-						return promise;
-					};
 					newcons.prototype = Object.create(cons.prototype);
+					newcons.index = new Index(name);
+					newcons.indexing = {};
 					if(config.datastore && config.datastore.name && config.datastore.type==="IndexedDB") {
-						newcons.joqularSave = function(aysnch) {
+						Object.defineProperty(newcons,"joqularSave",{enumerable:false,value:function(aysnch) {
 							var me = this, tid;
 							var promise = new Promise(function(resolve,reject) {
 								me.dbVersion || (me.dbVersion = 1);
@@ -1234,7 +1413,7 @@
 												objectstore.put(object,"root");
 											}
 											db.close();
-											var count = Object.keys(me.ids).length - 1; // -1 for nextId key
+											var count = me.index.getIds().length - 1; // -1 for nextId key
 											resolve(count);
 										};
 										request.onerror = function(event) {
@@ -1256,8 +1435,8 @@
 								
 							}*/
 							return promise;
-						}
-						newcons.joqularLoad = function(aysnch) {
+						}});
+						Object.defineProperty(newcons,"joqularLoad",{enumerable:false,value:function(aysnch) {
 							var me = this;
 							var promise = new Promise(function(resolve,reject) {
 								me.dbVersion || (me.dbVersion = 1);
@@ -1289,6 +1468,10 @@
 										me.joqularLoad();
 									} else {
 										objectstore = db.transaction(name).objectStore(name);
+										// look for checkpoints from failed transaction,
+										// if found, restore the checkpoint
+										
+										// else ...
 										var request = objectstore.get("root");
 										request.onsuccess = function(event) {
 											var object = request.result;
@@ -1327,7 +1510,7 @@
 								return null;
 							}
 							return promise;
-						};
+						}});
 					}
 					return newcons;
 				}
@@ -1335,7 +1518,8 @@
 					config.enhancePrimitives = true;
 					config.enhanceArray = true;
 					config.ehhanceDate = true;
-					constructor.joqularFind = function(pattern,wait,aliasnames) {
+					Object.defineProperty(constructor,"joqularFind",{enumarable:false,value:function(pattern,wait,aliasnames) {
+						var me = this;
 						function dowait(f) {
 							if(Object.keys(me.indexing).length===0) {
 								f();
@@ -1347,67 +1531,66 @@
 						if(wait) {
 							if(typeof(wait)==="function") {
 								dowait(function() {  
-									wait(null,joqularFind.call(me,pattern,me.index,aliasnames));  
+									wait(null,me.index.find(pattern,aliasnames));  
 								});
 							} else {
 								return new Promise(function(resolve,reject) {
-									dowait(function() { resolve(joqularFind.call(me,pattern,me.index,aliasnames)); });
+									dowait(function() { resolve(me.index.find(pattern,aliasnames)); });
 								});
 							}
 						}
-						return joqularFind.call(me,pattern,me.index,aliasnames);
-					};
-					constructor.joqularIndex = function(instance,async) {
-						var me = this, id = me.ids.nextId;
-						me.ids.nextId++;
-						me.ids[id] = instance;
+						return me.index.find(pattern,aliasnames)
+					}});
+					Object.defineProperty(constructor,"joqularIndex",{enumarable:false,value:function(instance,async) {
+						var me = this;
 						if(async) {
 							var tid;
 							if(typeof(async)==="function") {
-								tid = setTimeout(function() { joqularIndex.call(me,id,instance,me.index); delete me.indexing[tid]; async(instance); },0);
+								tid = setTimeout(function() { me.index.index(instance); delete me.indexing[tid]; async(instance); },0);
 								me.indexing[tid] = true;
 								return tid;
 							} else {
 								var promise = new Promise(function(resolve,reject) {
-									tid = setTimeout(function() { joqularIndex.call(me,id,instance,me.index); delete me.indexing[tid]; resolve(instance); },0);
+									tid = setTimeout(function() { me.index.index(instance); delete me.indexing[tid]; resolve(instance); },0);
 								});
 								me.indexing[tid] = promise;
 								return promise;
 							}
 						}
-						joqularIndex.call(me,id,instance,me.index);
+						me.index.index(instance); 
 						return instance;
-					};
+					}});
 				};
 				function Time(value,precision) {
 					if(value==null) {
-						value = new Date.getTime()
-					} else if(value instanceof Time) {
-						value = value.value;
+						value = new Date().getTime()
+					} else if(value.constructor===Time || value instanceof Time) {
+						value = value.valueOf();
 					} else if(value instanceof Date) {
 						value = value.getTime();
 					} else if(value instanceof TimeSpan) {
-						value = value.startingTime.valueOf();
+						value = value.starts.valueOf();
 					} else if(typeof(value)==="string") {
 						value = Date.parse(value);
 					}
-					this.value = value;
+					this.milliseconds = value;
 					this.toPrecision(precision,true);
+					Object.defineProperty(this,"constructor",{enumerable:false,configurable:true,writable:true,value:Time});
 				};
 				Time.prototype = Object.create(constructor.prototype);
 				Time.prototype.valueOf = function() {
-					return this.value;
+					return this.milliseconds;
 				};
 				Time.prototype.withPrecision = function(precision) {
 					return this.toPrecision(precision,false);
 				};
 				Time.prototype.toPrecision = function(precision,modify) {
 					modify = (modify || modify==null ? true : false);
-					if(!precision || this.value===Infinity || this.value===-Infinity || isNaN(this.value)) {
+					if(!precision || this.milliseconds===Infinity || this.milliseconds===-Infinity || isNaN(this.milliseconds)) {
 						if(modify) {
 							return this;
 						}
-						return new Time(this.value);
+						return new Time(this.milliseconds);
 					}
 					var Y1 = this.getFullYear();
 					var M1 = (["M","D","h","m","s","ms"].indexOf(precision)!==-1 ? this.getMonth() : null);
@@ -1507,25 +1690,27 @@
 				Object.keys(dateProperties).forEach(function(key) {
 					if(!Time.prototype[key]) {
 						Time.prototype[key] = function() {
-								var dt = new Date(this.value);
+								var dt = new Date(this.milliseconds);
 								var result = dt[key].apply(dt,arguments);
-								this.value = dt.getTime();
+								this.milliseconds = dt.getTime();
 								return result;
 						}
 					}
 				});
 				function Duration(value,period) {
 					period || (period = "ms");
-					if(value instanceof Duration) {
+					if(value.constructor===Duration || value instanceof Duration) {
 						period = "ms";
 						value = value.valueOf();
 					}
-					this.value = value * Duration.factors[period];
+					this.length = value * Duration.factors[period];
 					this.range = 0;
+					Object.defineProperty(this,"constructor",{enumerable:false,configurable:true,writable:true,value:Duration});
 				};
 				Duration.factors = {
 						Y: 31557600*1000,
 						M: (31557600*1000)/12, // psuedo-month
+						W: 7 * 24 * 60 * 60 * 1000,
 						D: 24 * 60 * 60 * 1000,
 						h: 60 * 60 * 1000,
 						m: 60 * 1000,
@@ -1533,8 +1718,16 @@
 						ms: 1
 					}
 				Duration.prototype = Object.create(constructor.prototype);
+				Object.defineProperty(Duration.prototype,"years",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.length/Duration.factors["Y"]; }});
+				Object.defineProperty(Duration.prototype,"months",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.length/Duration.factors["M"]; }});
+				Object.defineProperty(Duration.prototype,"weeks",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.length/Duration.factors["W"]; }});
+				Object.defineProperty(Duration.prototype,"days",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.length/Duration.factors["D"]; }});
+				Object.defineProperty(Duration.prototype,"hours",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.length/Duration.factors["h"]; }});
+				Object.defineProperty(Duration.prototype,"minutes",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.length/Duration.factors["m"]; }});
+				Object.defineProperty(Duration.prototype,"seconds",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.length/Duration.factors["s"]; }});
+				Object.defineProperty(Duration.prototype,"milliseconds",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.length; }});
 				Duration.prototype.valueOf = function() {
-					return this.value;
+					return this.length;
 				};
 				Duration.prototype.lt = toPredicate(function(value,period) {
 					period || (period = "s");
@@ -1579,28 +1772,38 @@
 					this.range = 0;
 				};
 				// need to define gt, lt etc. in context of range
-				function TimeSpan(startingTime,endingTime) {
-					if(startingTime instanceof TimeSpan) {
-						return new TimeSpan(startingTime.startingTime,startingTime.endingTime);
+				function TimeSpan(starts,ends) {
+					if((starts && starts.constructor===TimeSpan) || starts instanceof TimeSpan) {
+						return new TimeSpan(starts.starts,starts.ends);
 					}
-					this.startingTime = (startingTime!=null ? new Time(startingTime) : new Time(-Infinity));
-					this.endingTime = (endingTime!=null ? new Time(endingTime) : new Time(Infinity));
-					Object.defineProperty(this,"duration",{enumerable:true,configurable:false,get:function() { return this.endingTime - this.startingTime}, set: function() {}});
+					this.starts = (starts!=null ? new Time(starts).valueOf() : new Time(-Infinity).valueOf());
+					this.ends = (ends!=null ? new Time(ends).valueOf() : new Time(Infinity).valueOf());
+					Object.defineProperty(this,"duration",{enumerable:true,configurable:false,get:function() { return this.ends - this.starts}, set: function() {}});
+					Object.defineProperty(this,"constructor",{enumerable:false,configurable:true,writable:true,value:TimeSpan});
 				};
 				TimeSpan.prototype = Object.create(constructor.prototype);
 				TimeSpan.prototype.contains = toPredicate(function(value,precision) {
-					var startingTime = new Time(value.startingTime,precision);
-					var endingTime = new Time(value.endingTime,precision);
-					var time = new Time(value,precision);
-					return startingTime.valueOf() <= time.valueOf() <= endingTime.valueOf();
+					var starts, ends, time;
+					if(value instanceof TimeSpan) {
+						starts = time = new Time(value.starts,precision).valueOf();
+						ends = new Time(value.ends,precision).valueOf();
+					} else {
+						starts = time = ends = new Time(value.valueOf(),precision);
+					}
+					return this.starts <= starts <= time <= ends <= this.ends;
 				});
 				TimeSpan.prototype.intersects = toPredicate(function(value,precision) {
-					var startingTime = new Time(value.startingTime,precision);
-					var endingTime = new Time(value.endingTime,precision);
-					if(this.startingTime>=startingTime && this.startingTime<=endingTime) {
+					var starts, ends;
+					if(value instanceof TimeSpan) {
+						starts = new Time(value.starts,precision).valueOf();
+						ends = new Time(value.ends,precision).valueOf();
+					} else {
+						starts = ends = new Time(value.valueOf(),precision);
+					}
+					if(this.starts>=starts && this.starts<=ends) {
 						return true;
 					}
-					if(this.endingTime<=value.endingTime && this.endingTime>=startingTime) {
+					if(this.ends<=value.ends && this.ends>=starts) {
 						return true;
 					}
 					return false;
@@ -1609,14 +1812,14 @@
 					return !this.intersects(value,precision);
 				});
 				TimeSpan.prototype.coincident = toPredicate(function(value,precision) {
-					var startingTime, endingTime;
-					if(value instanceof Date || typeof(value)==="number") {
-						startingTime = endingTime = new Time(value,precision);
+					var starts, ends;
+					if(value instanceof TimeSpan) {
+						starts = new Time(value.starts,precision).valueOf();
+						ends = new Time(value.ends,precision).valueOf();
 					} else {
-						startingTime = new Time(value.startingTime,precision);
-						endingTime = new Time(value.endingTime,precision);
+						starts = ends = new Time(value.valueOf(),precision);
 					}
-					return new Time(this.startingTime,precision).valueOf()==startingTime.valueOf() && new Time(this.endingTime,precision).valueOf()==endingTime.valueOf();
+					return this.starts==starts && this.ends==ends;
 				})
 				TimeSpan.prototype.eq = toPredicate(function(value,precision) {
 					if(this===value) {
@@ -1625,44 +1828,44 @@
 					if(!(value instanceof TimeSpan)) {
 						return false;
 					}
-					return new Time(this.startingTime,precision).valueOf() === new Time(value.startingTime,precision).valueOf() &&
-						new Time(this.endingTime,precision).valueOf() === new Time(value.endingTime,precision).valueOf();
+					return new Time(this.starts,precision).valueOf() === new Time(value.starts,precision).valueOf() &&
+						new Time(this.ends,precision).valueOf() === new Time(value.ends,precision).valueOf();
 				});
 				TimeSpan.prototype.adjacentOrBefore = toPredicate(function(value,precision) {
-					return new Time(this.endingTime+new Duration(1,precision),precision).valueOf() <= new Time(value,precision).valueOf();
+					return new Time(this.ends+new Duration(1,precision),precision).valueOf() <= new Time(value,precision).valueOf();
 				});
 				TimeSpan.prototype.before = toPredicate(function(value,precision) {
-					return new Time(this.endingTime+new Duration(1,precision),precision).valueOf() < new Time(value,precision).valueOf();
+					return new Time(this.ends+new Duration(1,precision),precision).valueOf() < new Time(value,precision).valueOf();
 				});
 				TimeSpan.prototype.adjacentBefore = toPredicate(function(value,precision) {
-					return new Time(this.endingTime+new Duration(1,precision),precision).valueOf() === new Time(value,precision).valueOf();
+					return new Time(this.ends+new Duration(1,precision),precision).valueOf() === new Time(value,precision).valueOf();
 				});
 				TimeSpan.prototype.adjacentOrAfter = toPredicate(function(value,precision) {
-					var endingTime;
-					if(value instanceof TimeSpan) {
-						endingTime = new Time(value.endingTime,precision);
+					var ends;
+					if(value.constructor===TimeSpan || value instanceof TimeSpan) {
+						ends = new Time(value.ends,precision);
 					} else {
-						endingTime = new Time(value,precision);
+						ends = new Time(value,precision);
 					}
-					return new Time(this.startingTime-new Duration(1,precision),precision).valueOf() >= endingTime.valueOf();
+					return new Time(this.starts-new Duration(1,precision),precision).valueOf() >= ends.valueOf();
 				});
 				TimeSpan.prototype.after = toPredicate(function(value,precision) {
-					var endingTime;
-					if(value instanceof TimeSpan) {
-						endingTime = new Time(value.endingTime,precision);
+					var ends;
+					if(value.constructor===TimeSpan || value instanceof TimeSpan) {
+						ends = new Time(value.ends,precision);
 					} else {
-						endingTime = new Time(value,precision);
+						ends = new Time(value,precision);
 					}
-					return new Time(this.startingTime-new Duration(1,precision),precision).valueOf() > endingTime.valueOf();
+					return new Time(this.starts-new Duration(1,precision),precision).valueOf() > ends.valueOf();
 				});
 				TimeSpan.prototype.adjacentAfter = toPredicate(function(value,precision) {
-					var endingTime;
-					if(value instanceof TimeSpan) {
-						endingTime = new Time(value.endingTime,precision);
+					var ends;
+					if(value.constructor===TimeSpan || value instanceof TimeSpan) {
+						ends = new Time(value.ends,precision);
 					} else {
-						endingTime = new Time(value,precision);
+						ends = new Time(value,precision);
 					}
-					return new Time(this.startingTime-new Duration(1,precision),precision).valueOf() == endingTime.valueOf();
+					return new Time(this.starts-new Duration(1,precision),precision).valueOf() == ends.valueOf();
 				});
 				TimeSpan.prototype.adjacent = toPredicate(function(value,precision) {
 					if(this.adjacentBefore(value,precision)) {
@@ -1673,25 +1876,25 @@
 					}
 					return 0;
 				});
-				constructor.prototype.joqularMatch = function(pattern,aliases,scope) {
-					return joqularMatch.call(this,pattern,aliases,scope);
-				};
-				(constructor.prototype["instanceof"] = function(constructor) {
+				Object.defineProperty(constructor.prototype,"joqularMatch",{enumerable:false,value:function(pattern,aliases,scope) {
+					return joqularMatch.call(this,new MatchPattern(pattern,true),aliases,scope);
+				}});
+				Object.defineProperty(constructor.prototype,"instanceof",{enumerable:false,configurable:true,writable:true,value:toPredicate(function(constructor) {
 					return this instanceof constructor;
-				}).predicate = true;
-				constructor.prototype.eq = toPredicate(function(value) {
+				})});
+				Object.defineProperty(constructor.prototype,"eq",{enumerable:false,configurable:true,writable:true,value:toPredicate(function(value) {
 					// first clause handles an object or primitve and value===null or value===undefined
 					// second clause handles everything else because primitives and Objects will return themselves with .valueOf()
 					// array and other types of objects may need to override eq
 					return this.valueOf() === value || 
 						(value!=null && this.valueOf() === value.valueOf());
-				});
-				constructor.prototype.neq = toPredicate(function(value) {
+				})});
+				Object.defineProperty(constructor.prototype,"neq",{enumerable:false,configurable:true,writable:true,value:toPredicate(function(value) {
 					return !this.eq(value);
-				});
+				})});
 				if(config.enhancePrimitives) {
 					[Number,String,Boolean].forEach(function(primitive) {
-						primitive.prototype.joqularMatch = constructor.prototype.joqularMatch;
+						primitive.prototype.joqularMatch || (primitive.prototype.joqularMatch = constructor.prototype.joqularMatch);
 						(primitive.prototype.lt = function(value) {
 							return this.valueOf() < value || this.valueOf() < value.valueOf();
 						}).predicate=true;
@@ -1729,10 +1932,20 @@
 					return soundex(this)===soundex(value);
 				});
 				String.prototype.soundex = String.prototype.echoes;
+				Object.defineProperty(String.prototype,"match",{enumerable:true,configurable:true,writable:true,value:String.prototype.match});
 				String.prototype.match.predicate = true;
 				if(config.enhanceDate) {
-					Date.prototype.joqularMatch = constructor.prototype.joqularMatch;
-					Object.defineProperty(Date.prototype,"time",{enumerable:true,configurable:false,set:function() { return; },get:function() { return this.getTime(); }});
+					Date.prototype.joqularMatch || (Date.prototype.joqularMatch = constructor.prototype.joqularMatch);
+					Object.defineProperty(Date.prototype,"time",{enumerable:true,configurable:false,set:function(time) { this.setTime(time); },get:function() { return this.getTime(); }});
+					Object.defineProperty(Date.prototype,"year",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.getFullYear(); }});
+					Object.defineProperty(Date.prototype,"month",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.getMonth()+1; }});
+					Object.defineProperty(Date.prototype,"dayOfMonth",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.getDate(); }});
+					Object.defineProperty(Date.prototype,"hours",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.getHours(); }});
+					Object.defineProperty(Date.prototype,"minutes",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.getMinutes(); }});
+					Object.defineProperty(Date.prototype,"seconds",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.getSeconds(); }});
+					Object.defineProperty(Date.prototype,"milliseconds",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.getMilliseconds(); }});
+					Object.defineProperty(Date.prototype,"dayOfWeek",{enumerable:true,configurable:false,set:function() { return;},get:function() { return this.getDay()+1; }});
+					
 					Date.prototype.lt = toPredicate(function(value,precision) {
 						if(value instanceof TimeSpan) {
 							return value.after(this,precision);
@@ -1799,7 +2012,7 @@
 					});
 				}
 				if(config.enhanceArray) {
-					Array.prototype.joqularMatch = constructor.prototype.joqularMatch;
+					Array.prototype.joqularMatch || (Array.prototype.joqularMatch = constructor.prototype.joqularMatch);
 					Array.prototype.count = toProvider(function(type) {
 						return (!type ? this.length : this.filter(function(item) { return item && typeof(item.valueOf())===type; }).length);
 					});
@@ -1946,7 +2159,7 @@
 					});
 				}
 				if(config.enhanceSet) {
-					Set.prototype.joqularMatch = constructor.prototype.joqularMatch;
+					Set.prototype.joqularMatch || (Set.prototype.joqularMatch = constructor.prototype.joqularMatch);
 					Set.prototype.count = function() {
 						return this.size;
 					};
@@ -2009,7 +2222,12 @@
 					});
 				}
 				JOQULAR.createIndex = createIndex;
-				JOQULAR.select = joqularSelect;
+				JOQULAR.insert = function() {
+					return new Insert();
+				}
+				JOQULAR.select = function(projection) {
+					return new Select(projection);
+				}
 				JOQULAR.TimeSpan = TimeSpan;
 				JOQULAR.Time = Time;
 				JOQULAR.Duration = Duration;
