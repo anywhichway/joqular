@@ -102,7 +102,9 @@
 	            	while(array[mid]===key || (key && array[mid]===key.valueOf())) {
 		            	mid++;
 					}
-	            	results.push(mid-1);
+	            	if(results.indexOf(mid-1)===-1) { // if condition added by AnyWhichWay
+	            		results.push(mid-1);
+	            	}
 	            }
 	            return results;
 	        }
@@ -474,18 +476,40 @@
 	function Key() {
 		
 	}
-	function Kind() {
-		this.joqularIdMap = new Ids();
-		this.forgeinIds = {};
+	function Kind(kindName,key,keyKindName) {
+		var me = this;
+		me.joqularIdMap = new Ids();
+		me.joqularForgeinIds = {};
+		me.joqularKindName = kindName;
+		me.joqularKey = key;
+		me.joqularKeyKindName = keyKindName;
+		Object.observe(me.joqularForgeinIds,function(changes) {
+			changes.forEach(function(change) {
+				var action, fid = change.name, id;
+				switch(change.type) {
+				case "add": action = "PUT"; id = change.object[fid]; break;
+				case "delete": action = "DELETE"; id = change.oldValue; break;
+				}
+				if(fid!="undefined") {
+					console.log(action + " " + me.joqularKindName + "/" + me.joqularKey + "/" + me.joqularKeyKindName + "/" + fid + "/" + id);
+				}
+			});
+		});
+	}
+	Kind.prototype.getKeys = function() {
+		var keys = Object.keys(this);
+		return keys.filter(function(key) {
+			if(key==="joqularIdMap" || key==="joqularId" || key==="joqularForgeinIds" || key==="joqularKindName" || key==="joqularKey" || key==="joqularKeyKindName") {
+				return false;
+			}
+			return true;
+		});
 	}
 	Kind.prototype.getValues = function(kind) {
 		var me = this;
 		if(!me.joqularValues) {
-			var values = [], keys = Object.keys(me);
+			var values = [], keys = me.getKeys();
 			keys.forEach(function(key) {
-				if(key==="Functions" || key==="joqularIdMap" || key==="joqularId" || key==="forgeinIds") {
-					return;
-				}
 				var value;
 				switch(kind) {
 					case "Boolean": value = (key==="true" ? true : false); values.push(value); break;
@@ -554,7 +578,7 @@
 							pass = pass.concat(me[scopekey][kindname].getIds());
 						} else {
 							instancevalues.forEach(function(instancevalue) {
-								(kindname==="Number" && isNaN(instancevalue)) || (instancevalue = new Object.joqularIndexes[kindname](instancevalue).valueOf());
+								instancevalue = new Object.joqularIndexes[kindname](instancevalue).valueOf()
 								if(value(instancevalue)) {
 									pass = pass.concat(me[scopekey][kindname][instancevalue].getIds());
 								}
@@ -661,8 +685,8 @@
 				}
 			});
 		// walk other object
-		} else if(me[scopekey][kindname] && me[scopekey][kindname].forgeinIds && Object.joqularIndexes[kindname]) {
-			var fids = Object.keys(me[scopekey][kindname].forgeinIds);
+		} else if(me[scopekey][kindname] && me[scopekey][kindname].joqularForgeinIds && Object.joqularIndexes[kindname]) {
+			var fids = Object.keys(me[scopekey][kindname].joqularForgeinIds);
 			var subresults = Object.joqularIndexes[kindname].index.find(value,fids,scopes,scopekey);
 			if(subresults.length>0) {
 				pass = pass.concat(me[scopekey][kindname].getIds());
@@ -679,8 +703,8 @@
 				// look in child objects in case key was not present
 				var kindnames = Object.keys(me[scopekey]);
 				kindnames.forEach(function(kindname) {
-					if(me[scopekey][kindname].forgeinIds && Object.joqularIndexes[kindname]) {
-						var fids = Object.keys(me[scopekey][kindname].forgeinIds);
+					if(me[scopekey][kindname].joqularForgeinIds && Object.joqularIndexes[kindname]) {
+						var fids = Object.keys(me[scopekey][kindname].joqularForgeinIds);
 						var subresults = Object.joqularIndexes[kindname].index.find(value,fids,scopes,scopekey);
 						if(subresults.length>0) {
 							pass = pass.concat(me[scopekey][kindname].getIds());
@@ -698,8 +722,23 @@
 		results.splice.apply(results,[0,results.length].concat(tmp));
 		return results.length>0;
 	}
-	function Value() {
-		this.joqularIdMap = new Ids();
+	function Value(kindName,key,keyKindName,value) {
+		var me = this;
+		me.joqularIdMap = new Ids();
+		me.kindName = kindName;
+		me.key = key;
+		me.keyKindName = keyKindName;
+		me.value = value;
+		Object.observe(me.joqularIdMap,function(changes) {
+			changes.forEach(function(change) {
+				var action;
+				switch(change.type) {
+				case "add": action = "PUT"; break;
+				case "delete": action = "DELETE"; break;
+				}
+				console.log(action + " " + me.kindName + "/" + me.key + "/" + me.keyKindName + "/" + me.value + "/" + change.name);
+			});
+		});
 	}
 	Value.prototype.getIds = function() {
 		if(!this.joqularIds) {
@@ -818,8 +857,7 @@
 		});
 	}
 	function Index(kindName) {
-		this.joqularIdMap = new Ids();
-		this.keys = new Kind();
+		this.keys = new Kind(kindName);
 		this.nextId = 0;
 		this.kindName = kindName;
 	}
@@ -833,7 +871,7 @@
 		var me = this, id, kind = me.keys, value, type, kindname = instance.constructor.name;
 		if(["Boolean","Number","String","Null"].indexOf(kindname)===-1) {
 			if(instance.joqularId==null) {
-				id = me.nextId++;
+				id = me.nextId++; // this should be a POST /kindname
 				instance.joqularId = id;
 			} else {
 				id = instance.joqularId;
@@ -843,6 +881,9 @@
 				me.update(instance.joqularId,changes);
 			});
 		}
+		if(kindname==="Function") {
+			return;
+		}
 		for(var key in instance) {
 			if(kindname==="String" && typeof(instance[key])==="string") continue; 
 			value = instance[key];
@@ -850,28 +891,31 @@
 			if(value===undefined) continue;
 			kindname = value.constructor.name, type = typeof(value.valueOf());
 			if(instance[key]===null) type = "undefined";
-			Object.joqularIndexes[kindname] || (Object.joqularIndexes[kindname] = value.constructor);
-			Object.joqularIndexes[kindname].index || (Object.joqularIndexes[kindname].index = new Index(kindname));
 			kind[key] || (kind[key] = new Key());
-			kind[key][kindname] || (kind[key][kindname] = new Kind());
+			kind[key][kindname] || (kind[key][kindname] = new Kind(kind.joqularKindName,key,kindname));
 			if(id!=null) {
 				kind[key][kindname].joqularIdMap[id] = 1;
 			}
+			if(kindname==="Function") {
+				continue;
+			}
+			Object.joqularIndexes[kindname] || (Object.joqularIndexes[kindname] = value.constructor);
+			Object.joqularIndexes[kindname].index || (Object.joqularIndexes[kindname].index = new Index(kindname));
+			if(value.joqularId==null) {
+				Object.joqularIndexes[kindname].index.index(value);
+			}
 			if(["Boolean","Number","String","Null"].indexOf(kindname)>=0) {
-				kind[key][kindname][value.valueOf()] || (kind[key][kindname][value.valueOf()] = new Value());
+				kind[key][kindname][value.valueOf()] || (kind[key][kindname][value.valueOf()] = new Value(kind.joqularKindName,key,kindname,value.valueOf()));
 				kind[key][kindname][value.valueOf()].joqularIdMap[id] = 1;
-				(kindname==="Number" && isNaN(value)) || Object.joqularIndexes[kindname].index.index(value);
+				Object.joqularIndexes[kindname].index.index(value);
 			} else if(kindname!==me.kindName || value.joqularId!==id){
-				if(value.joqularId==null) {
-					Object.joqularIndexes[kindname].index.index(value);
-				}
-				kind[key][kindname].forgeinIds[value.joqularId] = id; 
+				kind[key][kindname].joqularForgeinIds[value.joqularId] = id;
 			}
 		}
 		if(instance instanceof Array) {
 			kind.length!=null || (kind.length = new Key());
-			kind.length.Number || (kind.length.Number = new Kind());
-			kind.length.Number[instance.length] || (kind.length.Number[instance.length] = new Value());
+			kind.length.Number || (kind.length.Number = new Kind(kind.joqularKindName,"length","Number"));
+			kind.length.Number[instance.length] || (kind.length.Number[instance.length] = new Value(kind.joqularKindName,"length","Number",instance.length));
 			kind.length.Number[instance.length].joqularIdMap[id] = 1;
 			kind.length.Number.joqularIdMap[id] = 1;
 		}
@@ -883,24 +927,24 @@
 			if(change.type==="update" || change.type==="delete") {
 				var oldvalue = toObject(change.oldValue), oldkindname = oldvalue.constructor.name, oldtype = typeof(change.oldValue);
 				if(change.oldValue!==null && oldtype==="object") {
-					delete kind[key][oldkindname].forgeinIds[oldvalue.joqularId]; 
-				} else if(kind[key][oldkindname][change.oldValue].joqularIdMap[id]) {
+					delete kind[key][oldkindname].joqularForgeinIds[oldvalue.joqularId]; 
+				} else if(kind[key][oldkindname][change.oldValue] && kind[key][oldkindname][change.oldValue].joqularIdMap[id]) {
 					delete kind[key][oldkindname][change.oldValue].joqularIdMap[id]; // delete reference from index
 					delete kind[key][oldkindname][change.oldValue].joqularIds; // delete cached id list
 				}
 			}
 			kind[key] || (kind[key] = new Key());
-			kind[key][kindname] || (kind[key][kindname] = new Kind());
+			kind[key][kindname] || (kind[key][kindname] = new Kind(kind.joqularKindName,key,kindname));
 			if(change.type==="update" || change.type==="add") {
 				if(type==="object" && value!=null) {
-					if(value.joqularId===null) {
+					if(value.joqularId==null) {
 						Object.joqularIndexes[kindname] || (Object.joqularIndexes[kindname] = value.constructor);
 						Object.joqularIndexes[kindname].index || (Object.joqularIndexes[kindname].index = new Index(kindname));
 						Object.joqularIndexes[kindname].index.index(value);
 					}
-					kind[key][kindname].forgeinIds[value.joqularId]
+					kind[key][kindname].joqularForgeinIds[value.joqularId] = id;
 				} else {
-					kind[key][kindname][value.valueOf()] || (kind[key][kindname][value.valueOf()] = new Value());
+					kind[key][kindname][value.valueOf()] || (kind[key][kindname][value.valueOf()] = new Value(kind.joqularKindName,key,kindname,value.valueOf()));
 					kind[key][kindname][value.valueOf()].joqularIdMap[id] = 1;
 				}
 			}
@@ -934,7 +978,7 @@
 			found.forEach(function(id) {
 				var matchscopeid, matchscope;
 				if(scopekey && scopes[scopes.length-1][scopekey]) {
-					matchscopeid = scopes[scopes.length-1][scopekey][me.kindName].forgeinIds[id];
+					matchscopeid = scopes[scopes.length-1][scopekey][me.kindName].joqularForgeinIds[id];
 					matchscope = [scopes[scopes.length-1].joqularIdMap[matchscopeid]];
 				}
 				if(matchlength===0 || joqularMatch.call(me.keys.joqularIdMap[id],matchpattern,aliases,matchscope)) {
@@ -945,8 +989,7 @@
 		return results;
 	}
 	Index.prototype.clear = function(indexOnly,asynch) {
-		this.joqularIdMap = new Ids();
-		this.keys = new Kind();
+		this.keys = new Kind(this.kindName);
 		this.nextId = 0;
 		var promise;
 		if(!indexOnly) {
@@ -972,7 +1015,7 @@
 			ids = me.getIds();
 		}
 		ids.forEach(function(id) {
-			me.joqularIdMap[id] = 1;
+			me.keys.joqularIdMap[id] = 1;
 		});
 	}
 	Index.prototype.restore = function(id) {
@@ -983,7 +1026,7 @@
 			ids = me.getIds();
 		}
 		ids.forEach(function(id) {
-			var object = me.joqularIdMap[id];
+			var object = me.keys.joqularIdMap[id];
 			if(!object) {
 				return;
 			}
@@ -991,16 +1034,16 @@
 				object = Object.create(cons.prototype);
 				Object.defineProperty(object,"constructor",{enumerable:false,configurable:true,writable:true,value:cons});
 				object.__proto__ = cons.prototype;
-				var keys = Object.keys(me.keys);
+				var keys = me.keys.getKeys();
 				keys.forEach(function(key) {
 					var kindnames = Object.keys(me.keys[key]);
 					kindnames.forEach(function(kindname) {
-							if(["Boolean","Number","String","Null"].indexOf(kindname)>=0) { // FUnction??
+							if(["Boolean","Number","String","Null"].indexOf(kindname)>=0) { // Function??
 								var values = me.keys[key][kindname].getValues(kindname);
 								values.forEach(function(value) {
 									if(me.keys[key][kindname][value].joqularIdMap[id]) {
 										switch(kindname) {
-										case "Boolean": object[key] = (value==="true" ? true : false); break;
+										case "Boolean": object[key] = (value===true ? true : false); break;
 										case "Number": object[key] = parseFloat(value); break;
 										case "String" : object[key] = value; break;
 										case "Null" : object[key] = null;
@@ -1008,13 +1051,22 @@
 									}
 								});
 							} else {
-								// joqularRestore(object,cons.index[key][type]);
+								var cons = Object.joqularIndexes[kindname], fids;
+								if(cons && cons.index) {
+									fids = Object.keys(me.keys[key][kindname].joqularForgeinIds);
+									fids.forEach(function(fid) {
+										if(me.keys[key][kindname].joqularForgeinIds[fid]===id) {
+											object[key] = cons.index.restore(fid)[fid];
+										}
+									});
+								}
 							}
 						});
 				});
-				me.joqularIdMap[id] = object;
-				results[id] = object;
-			}	
+				object.joqularId = id;
+				me.keys.joqularIdMap[id] = object;
+			}
+			results[id] = object;
 		});
 		return results;
 	}
@@ -1056,33 +1108,45 @@
 		var me = this, constructor = me.impacts[0], object;
 		if(me.keyNames && me.keyValues) {
 			object = Object.create(constructor.prototype);
-			Object.defineProperty(object,"constructor",{enumerable:false,value:me.impacts[0]});
+			Object.defineProperty(object,"constructor",{enumerable:false,value:constructor});
 			object.__proto__ = constructor.prototype;
 			me.keyNames.forEach(function(key,i) {
 				object[key] = me.keyValues[i];
 			});
-			constructor.joqularIndex(object);
+			constructor.index.index(object);
 			if(persist) {
 				constructor.joqularSave();
 			}
+			return object;
 		} else if(me.insert) {
-			object = me.insert;
-			if(!(object instanceof me.impacts[0])) {
-				var object = Object.create(constructor.prototype);
-				Object.defineProperty(object,"constructor",{enumerable:false,value:me.impacts[0]});
-				//object.constructor = constructor;
-				object.__proto__ = constructor.prototype;
-				var keys = Object.keys(me.insert);
-				keys.forEach(function(key) {
-					object[key] = me.insert[key];
-				});
+			var objects;
+			if(me.insert instanceof Array) {
+				objects = me.insert;
+			} else {
+				objects = [me.insert];
 			}
-			constructor.joqularIndex(object);
+			objects.forEach(function(object,i) {
+				if(!(object instanceof constructor)) {
+					var newobject = Object.create(constructor.prototype);
+					Object.defineProperty(newobject,"constructor",{enumerable:false,value:constructor});
+					newobject.__proto__ = constructor.prototype;
+					var keys = Object.keys(object);
+					keys.forEach(function(key) {
+						newobject[key] = object[key];
+					});
+					objects[i] = newobject;
+				}
+				constructor.index.index(objects[i]);
+			});
 			if(persist) {
 				constructor.joqularSave();
+			}
+			if(me.insert instanceof Array) {
+				return objects;
+			} else {
+				return objects[0];
 			}
 		}
-		return object;
 	}
 	Insert.prototype.toJSON = function() {
 		var json = {};
@@ -1349,6 +1413,11 @@
 				function createIndex(cons,auto,async,name) {
 					auto = (auto===undefined ? true : auto);
 					name || (name = cons.name);
+					if(["Boolean","Number","String"].indexOf(cons.name)>=0) {
+						cons.index = new Index();
+						cons.index.index(new cons());
+						return cons;
+					}
 					var newcons = Function("root","cons","auto","async","return function " + name + "() {var me = this;if(!(me instanceof " + name + ")) { me = new " + name + "(); } cons.apply(me,arguments); Object.defineProperty(me,'constructor',{enumerable:false,value:" + name + "}); return (auto ? " + name + ".joqularIndex(me,async) : me); }")(constructor,cons,auto,async);
 					Object.joqularIndexes[name] = newcons;
 					var keys = Object.getOwnPropertyNames(constructor);
@@ -1367,7 +1436,7 @@
 							
 						}
 					});
-					newcons.prototype = Object.create(cons.prototype);
+					//newcons.prototype = Object.create(cons.prototype);
 					newcons.index = new Index(name);
 					newcons.indexing = {};
 					if(config.datastore && config.datastore.name && config.datastore.type==="IndexedDB") {

@@ -1,9 +1,20 @@
 <html>
 <head>
-<script src="object-observe.js" type="text/javascript"></script>
-<script src="es6-promise.min.js" type="text/javascript"></script>
-<script src="es6-collections.min.js" type="text/javascript"></script>
-<script src="../joqular.js" type="text/javascript"></script>
+<script src="../javascript/chrome-proxy.js" type="text/javascript"></script>
+<script src="../javascript/proxy-observe.js" type="text/javascript"></script>
+<script src="../javascript/json5-ex.js" type="text/javascript"></script>
+<script src="../javascript/generic.js" type="text/javascript"></script>
+<script src="../javascript/schema.js" type="text/javascript"></script>
+<script src="../javascript/nom.js" type="text/javascript"></script>
+<script src="../javascript/uuid.js" type="text/javascript"></script>
+<script src="../javascript/es6-promise.min.js" type="text/javascript"></script>
+<script src="../javascript/es6-collections.min.js" type="text/javascript"></script>
+<script src="../javascript/object-ex.js" type="text/javascript"></script>
+<script src="../javascript/about-time.js" type="text/javascript"></script>
+
+<script src="../javascript/joqular.js" type="text/javascript"></script>
+<script src="http://localhost:3000/joqular/client.js" type="text/javascript" charset="utf-8"></script>
+
 </head>
 <body>
 Open browser development tools to see results of tests.
@@ -11,6 +22,8 @@ Open browser development tools to see results of tests.
 "use strict";
 var RUNTEST;
 var LOGSUCCESS = false;
+NOMTRACE = 0;
+
 
 function test$$() {
 	return this.aString==="astring";
@@ -18,10 +31,18 @@ function test$$() {
 function test$$Negative() {
 	return this.aString===null;
 }
-Object = JOQULAR.enhance(Object,{enhancePrimitives:true,enhanceArray:true,enhanceSet:true,enhanceDate:true,index:true,datastore:{name:"JOQULARTest",type:"IndexedDB",format:"pseudo-blob"}});
-Object = JOQULAR.createIndex(Object);
 
-var to = {
+
+function Entity(config) {
+	for(var key in config) {
+		this[key] = config[key];
+	}
+}
+Entity = new JOQULAR.Entity(Entity,"Entity");
+var EntitySchema = new Schema({testId:{required:true,type:"number"}});
+
+var to1 = new Entity({
+	name: "to1",
 	anUndefined: undefined,
 	aNull: null,
 	aTrue: true,
@@ -52,29 +73,33 @@ var to = {
 	aDate2: new Date(2015,0,15,12,30,30,500),
 	aDate3: new Date(2015,0,16,12,30,30,500),
 	aDate4: new Date(2015,1,15,12,30,30,500),
-	aTimeYear: new JOQULAR.Time(new Date(2014,1,15,12,30,30,500)).withPrecision("Y"),
-	aTimeMonth: new JOQULAR.Time(new Date(2014,1,15,12,30,30,500)).withPrecision("M"),
-	aTimeDay: new JOQULAR.Time(new Date(2014,1,15,12,30,30,500)).withPrecision("D"),
-	aTimeHour: new JOQULAR.Time(new Date(2014,1,15,12,30,30,500)).withPrecision("h"),
-	aTimeMinute: new JOQULAR.Time(new Date(2014,1,15,12,30,30,500)).withPrecision("m"),
-	aTimeSecond: new JOQULAR.Time(new Date(2014,1,15,12,30,30,500)).withPrecision("s"),
-	aTimeMillisecond: new JOQULAR.Time(new Date(2014,1,15,12,30,30,500)).withPrecision("ms"),
-	aYear: new JOQULAR.Duration(1,"Y"),
-	aMonth: new JOQULAR.Duration(1,"M"),
-	aWeek: new JOQULAR.Duration(1,"W"),
-	aDay: new JOQULAR.Duration(1,"D"),
-	anHour: new JOQULAR.Duration(1,"h"),
-	aMinute: new JOQULAR.Duration(1,"m"),
-	aSecond: new JOQULAR.Duration(1,"s"),
-	aMillisecond: new JOQULAR.Duration(1,"ms"),
-	aTimeSpan1: new JOQULAR.TimeSpan(new Date(2013,1,15,12,30,30,500),new Date(2015,1,15,12,30,30,500)),
-	aTimeSpan2: new JOQULAR.TimeSpan(new Date(2012,1,15,12,30,30,500)),
-	aTimeSpan3: new JOQULAR.TimeSpan(null,new Date(2014,1,15,12,30,30,500)),
-	aTimeSpan4: new JOQULAR.TimeSpan(new Date(2013,1,15,12,30,30,500),new Date(2014,1,15,12,30,30,500)),
-	aTimeSpan5: new JOQULAR.TimeSpan(new Date(2014,1,15,12,30,30,500),new Date(2015,1,15,12,30,30,500)),
-}
-Object.joqularIndex(to);
-
+	aTimeYear: new Time(new Date(2014,1,15,12,30,30,500)).withPrecision("Y"),
+	aTimeMonth: new Time(new Date(2014,1,15,12,30,30,500)).withPrecision("M"),
+	aTimeDay: new Time(new Date(2014,1,15,12,30,30,500)).withPrecision("D"),
+	aTimeHour: new Time(new Date(2014,1,15,12,30,30,500)).withPrecision("h"),
+	aTimeMinute: new Time(new Date(2014,1,15,12,30,30,500)).withPrecision("m"),
+	aTimeSecond: new Time(new Date(2014,1,15,12,30,30,500)).withPrecision("s"),
+	aTimeMillisecond: new Time(new Date(2014,1,15,12,30,30,500)).withPrecision("ms"),
+	aYear: new Duration(1,"Y"),
+	aMonth: new Duration(1,"M"),
+	aWeek: new Duration(1,"W"),
+	aDay: new Duration(1,"D"),
+	anHour: new Duration(1,"h"),
+	aMinute: new Duration(1,"m"),
+	aSecond: new Duration(1,"s"),
+	aMillisecond: new Duration(1,"ms"),
+	aTimeSpan1: new TimeSpan(new Date(2013,1,15,12,30,30,500),new Date(2015,1,15,12,30,30,500)),
+	aTimeSpan2: new TimeSpan(new Date(2012,1,15,12,30,30,500)),
+	aTimeSpan3: new TimeSpan(null,new Date(2014,1,15,12,30,30,500)),
+	aTimeSpan4: new TimeSpan(new Date(2013,1,15,12,30,30,500),new Date(2014,1,15,12,30,30,500)),
+	aTimeSpan5: new TimeSpan(new Date(2014,1,15,12,30,30,500),new Date(2015,1,15,12,30,30,500)),
+});
+var to2 = new Entity({
+	name: "to2",
+	aOne: 1});
+var to3 = new Entity({
+	name: "to3",
+	aOne: 1});
 
 var positivetests = [
 	{aNull: null},
@@ -84,7 +109,7 @@ var positivetests = [
 	{aTrue: true},
 	{aTrue: {$eq: true}},
 	{aTrue: {$neq: false}},
-	{aTrue: {$neq: "true"}},
+	{aTrue: {$neeq: "true"}},
 	{aTrue: {$gte: false}},
 	{aTrue: {$gt: false}},
 	{aFalse: {$lt: true}},
@@ -95,18 +120,18 @@ var positivetests = [
 	{aFalse: {$neq: true}},
 	{aFalse: {$neq: "false"}},
 	{aFalse: {$gte: false}},
-	{aOne: 1},
-	{aOne: {$lte: 1}},
-	{aOne: {$eq: 1}},
-	{aOne: {$neq: 2}},
-	{aOne: {$neq: "1"}},
-	{aOne: {$gte: 1}},
-	{aOne: {$in: [1,2,3]}},
-	{aOne: {$in: new Set([1,2,3])}},
-	{aOne: {$nin: [4,5,6]}},
-	{aOne: {$nin: new Set([4,5,6])}},
-	{aOne: {$between: [0,2]}},
-	{aOne: {$outside: [3,4]}},
+	{aOne: 1, name:"to1"},
+	{aOne: {$lte: 1}, name:"to1"},
+	{aOne: {$eq: 1}, name:"to1"},
+	{aOne: {$neq: 2}, name:"to1"},
+	{aOne: {$neeq: "1"}, name:"to1"},
+	{aOne: {$gte: 1}, name:"to1"},
+	{aOne: {$in: [1,2,3]}, name:"to1"},
+	{aOne: {$in: new Set([1,2,3])}, name:"to1"},
+	{aOne: {$nin: [4,5,6]}, name:"to1"},
+	{aOne: {$nin: new Set([4,5,6])}, name:"to1"},
+	{aOne: {$between: [0,2]}, name:"to1"},
+	{aOne: {$outside: [3,4]}, name:"to1"},
 	{aNaN: {$: isNaN}},
 	{aString: "astring"},
 	{aString: {$match: /as*/g}},
@@ -119,28 +144,27 @@ var positivetests = [
 	{aString: {$neq: 1}},
 	{aString: {$gte: "astring"}},
 	{anObject: {anotherString: "astring"}},
+	{anObject: {anotherString: {$self: '/anObject/anotherString'}}},
+	{anObject: {anotherString: {$eq: {$self: '/anObject/anotherString'}}}},
 	{anObject: {aChildObject: {anotherString: "astring"}}},
 	{anObject: {aChildObject: {aGrandChildObject: {anotherString: "astring"}}}},
 	{anObject: {aChildObject: {aGrandChildObject: {anotherString: "astring", anotherNaN: {$: isNaN}}}}},
-	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$eq: {'/': "aString"}}}}}}, // root
-	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$eq: {'/anObject': "anotherString"}}}}}}, // anObject
-	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$eq: {'/anObject.aChildObject': "anotherString"}}}}}}, // parent
-	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$eq: {'/anObject.aChildObject.aGrandChildObject': "anotherString"}}}}}}, // back down to self
-	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$eq: {'..': "anotherString"}}}}}}, // parent
-	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$eq: {'..aGrandChildObject': "anotherString"}}}}}}, // back down to self
-	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$eq: {'.': "anotherString"}}}}}}, // self
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$eq: {$self: '/aString'}}}}}},
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$eq: {$self: '/anObject/anotherString'}}}}}}, 
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$eq: {$self: '/anObject/aChildObject/anotherString'}}}}}},
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$eq: {$self: '../anotherString'}}}}}},
 	{anArray1: [1,2,3,4]},
 	{anArray1: {length: 4}},
 	{anArray1: {length: {$eq: 4}}},
-	{anArray1: {$count: 4}},
+	{anArray1: {count: 4}},
 	{anArray1: {$min: 1}},
 	{anArray1: {$max: 4}},
-	{anArray1: {$count: {$lt: 5}}},
-	{anArray1: {$count: {$lte: 4}}},
-	{anArray1: {$count: {$eq: 4}}},
-	{anArray1: {$count: {$neq: 5}}},
-	{anArray1: {$count: {$gte: 4}}},
-	{anArray1: {$count: {$gt: 3}}},
+	{anArray1: {count: {$lt: 5}}},
+	{anArray1: {count: {$lte: 4}}},
+	{anArray1: {count: {$eq: 4}}},
+	{anArray1: {count: {$neq: 5}}},
+	{anArray1: {count: {$gte: 4}}},
+	{anArray1: {count: {$gt: 3}}},
 	{anArray1: {$avg: 2.5}},
 	{anArray1: {$avg: {$lt: 3}}},
 	{anArray1: {$avg: {$eq: 2.5}}},
@@ -157,6 +181,21 @@ var positivetests = [
 	{anArray1: {$some: function(i) { return i===4}}},
 	{aSet1: {$eq: new Set([1,2,3,4])}},
 	{aSet1: {$neq: [1,2,3]}},
+	{aSet1: {size: 4}},
+	{aSet1: {size: {$eq: 4}}},
+	{aSet1: {count: 4}},
+	{aSet1: {$min: 1}},
+	{aSet1: {$max: 4}},
+	{aSet1: {count: {$lt: 5}}},
+	{aSet1: {count: {$lte: 4}}},
+	{aSet1: {count: {$eq: 4}}},
+	{aSet1: {count: {$neq: 5}}},
+	{aSet1: {count: {$gte: 4}}},
+	{aSet1: {count: {$gt: 3}}},
+	{aSet1: {$avg: 2.5}},
+	{aSet1: {$avg: {$lt: 3}}},
+	{aSet1: {$avg: {$eq: 2.5}}},
+	{aSet1: {$avg: {$gt: 2}}},
 	{aSet1: {$contains: 1}},
 	{aSet1: {$includes: 1}},
 	{aSet1: {$excludes: 5}},
@@ -165,13 +204,19 @@ var positivetests = [
 	{aSet1: {$coincident: [1,3,4,2]}},
 	{aSet4: {$every: function(i) { return i===1}}},
 	{aSet1: {$some: function(i) { return i===4}}},
-	{aSet1: {$coincident: {'..': 'anArray1'}}},
-	{aSet1: {$intersects: {'..': 'anArray1'}}},
-	{aSet1: {$disjoint: {'..': 'anArray2'}}},
+	{aSet1: {$coincident: {$self: '../aSet1'}}},
+	{aSet1: {$intersects: {$self: '../aSet1'}}},
+	{aSet1: {$disjoint: {$self: '../aSet2'}}},
 	{aDate1: {time: new Date(2014,0,15,12,30,30,500).getTime()}},
+	{aDate1: {year: 2014}},
+	{aDate1: {year: 2014, month:1}},
+	{aDate1: {year: 2014, month:1, dayOfMonth:15}},
+	{aDate1: {year: 2014, month:1, dayOfMonth:15, hours:12}},
+	{aDate1: {year: 2014, month:1, dayOfMonth:15, hours:12, minutes:30}},
+	{aDate1: {year: 2014, month:1, dayOfMonth:15, hours:12, minutes:30, seconds:30}},
 	{aDate1: {year: 2014, month:1, dayOfMonth:15, hours:12, minutes:30, seconds:30, milliseconds:500}},
-	{aDate1: {dayOfMonth: {$lt: {'/aDate3': 'dayOfMonth'}}}},
-	{aDate1: {dayOfMonth: {$lt: {'..aDate3': 'dayOfMonth'}}}},
+	{aDate1: {dayOfMonth: {$lt: {$self: '/aDate3/dayOfMonth'}}}},
+	{aDate1: {dayOfMonth: {$lte: {$self: '../dayOfMonth'}}}},
 	{aDate1: {dayOfMonth: 15}},
 	{aDate1: {$lt: new Date(2015,0,15,12,30,30,500)}},
 	{aDate1: {$lte: new Date(2014,0,15,12,30,30,500)}},
@@ -192,20 +237,20 @@ var positivetests = [
 	{aDate1: {$neq: [new Date(2014,0,15,12,35,0,500),"m"]}},
 	{aDate1: {$neq: [new Date(2014,0,15,12,30,35,250),"s"]}},
 	{aDate1: {$neq: [new Date(2014,0,15,12,30,30,250),"ms"]}},
-	{aTimeYear: new JOQULAR.Time(new Date(2014,1,15,12,30,30,500)).withPrecision("Y")},
-	{aTimeMonth: new JOQULAR.Time(new Date(2014,1,15,12,30,30,500)).withPrecision("M")},
-	{aTimeDay: new JOQULAR.Time(new Date(2014,1,15,12,30,30,500)).withPrecision("D")},
-	{aTimeHour: new JOQULAR.Time(new Date(2014,1,15,12,30,30,500)).withPrecision("h")},
-	{aTimeSecond: new JOQULAR.Time(new Date(2014,1,15,12,30,30,500)).withPrecision("s")},
-	{aTimeMillisecond: new JOQULAR.Time(new Date(2014,1,15,12,30,30,500)).withPrecision("ms")},
-	{aTimeYear: {$eq: {'..': 'aTimeYear'}}},
-	//{aTimeYear: {milliseconds: {$eq: {'.': 'milliseconds'}}}},
-	{aTimeYear: {milliseconds: {$lt: {'/aTimeMonth': 'milliseconds'}}}},
-	{aTimeMonth: {$lt: {'..': 'aTimeDay'}}},
-	{aTimeDay: {$lt: {'..': 'aTimeHour'}}},
-	{aTimeHour: {$lt: {'..': 'aTimeMinute'}}},
-	{aTimeMinute: {$lt: {'..': 'aTimeSecond'}}},
-	{aTimeSecond: {$lt: {'..': 'aTimeMillisecond'}}},
+	{aTimeYear: new Time(new Date(2014,1,15,12,30,30,500)).withPrecision("Y")},
+	{aTimeMonth: new Time(new Date(2014,1,15,12,30,30,500)).withPrecision("M")},
+	{aTimeDay: new Time(new Date(2014,1,15,12,30,30,500)).withPrecision("D")},
+	{aTimeHour: new Time(new Date(2014,1,15,12,30,30,500)).withPrecision("h")},
+	{aTimeSecond: new Time(new Date(2014,1,15,12,30,30,500)).withPrecision("s")},
+	{aTimeMillisecond: new Time(new Date(2014,1,15,12,30,30,500)).withPrecision("ms")},
+	{aTimeYear: {$eq: {$self: '../aTimeYear'}}},
+	{aTimeYear: {milliseconds: {$eq: {$self: '../milliseconds'}}}},
+	{aTimeYear: {milliseconds: {$lt: {$self: '/aTimeMonth/milliseconds'}}}},
+	{aTimeMonth: {$lt: {$self: '../aTimeDay'}}},
+	{aTimeDay: {$lt: {$self: '../aTimeHour'}}},
+	{aTimeHour: {$lt: {$self: '../aTimeMinute'}}},
+	{aTimeMinute: {$lt: {$self: '../aTimeSecond'}}},
+	{aTimeSecond: {$lt: {$self: '../aTimeMillisecond'}}},
 	{aYear: {length: {$eq: 31557600*1000}}}, 
 	{aMonth: {length: (31557600*1000)/12}}, // a psuedo month
 	{aDay: {length: 24*60*60*1000}},
@@ -216,70 +261,77 @@ var positivetests = [
 	{aYear: {years: 1}},
 	{aMonth: {months: 1}},
 	{aMonth: {years: {$lt: 1}}},
+	{aMonth: {$lt: {$self: '/aYear'}}},
 	{aWeek: {weeks: 1}},
 	{aWeek: {months: {$lt: 1}}},
+	{aWeek: {$lt: {$self: '/aMonth'}}},
 	{aDay: {days: 1}},
 	{aDay: {months: {$lt: 1}}},
+	{aDay: {$lt: {$self: '/aWeek'}}},
 	{anHour: {hours: 1}},
 	{anHour: {minutes: 60}},
 	{anHour: {days: {$lt: 1}}},
+	{anHour: {$lt: {$self: '/aDay'}}},
 	{aMinute: {minutes: 1}},
 	{aMinute: {hours: {$lt: 1}}},
 	{aMinute: {seconds: 60}},
+	{aMinute: {$lt: {$self: '/anHour'}}},
 	{aSecond: {seconds: 1}},
 	{aSecond: {minutes: {$lt: 1}}},
 	{aSecond: {milliseconds: 1000}},
+	{aSecond: {$lt: {$self: '/aMinute'}}},
 	{aMillisecond: {milliseconds: 1}},
 	{aMillisecond: {seconds: {$lt: 1}}},
 	{aMillisecond: {milliseconds: 1}},
-	{aYear: {$lt: [new JOQULAR.Duration(2,"Y"),"Y"]}},
-	{aYear: {$lte: [new JOQULAR.Duration(1,"Y"),"Y"]}},
-	{aYear: {$eq: [new JOQULAR.Duration(1,"Y"),"Y"]}},
-	{aYear: {$eq: [new JOQULAR.Duration(1,"Y"),"M"]}},
-	{aYear: {$neq: [new JOQULAR.Duration(2,"Y"),"Y"]}},
-	{aYear: {$gte: [new JOQULAR.Duration(1,"Y"),"Y"]}},
-	{aYear: {$gt: [new JOQULAR.Duration(11,"M"),"Y"]}},
-	{aMonth: {$lt: [new JOQULAR.Duration(1,"Y"),"Y"]}},
-	{aMonth: {$lt: [new JOQULAR.Duration(2,"M"),"M"]}},
-	{aMonth: {$lte: [new JOQULAR.Duration(1,"M"),"M"]}},
-	{aMonth: {$eq: [new JOQULAR.Duration(1,"M"),"M"]}},
-	{aMonth: {$eq: [new JOQULAR.Duration(1,"M"),"M"]}},
-	{aMonth: {$neq: [new JOQULAR.Duration(2,"M"),"M"]}},
-	{aMonth: {$gte: [new JOQULAR.Duration(1,"M"),"M"]}},
-	{aMonth: {$gt: [new JOQULAR.Duration(28,"D"),"M"]}},
-	{aDay: {$lt: [new JOQULAR.Duration(1,"Y"),"Y"]}},
-	{aDay: {$lt: [new JOQULAR.Duration(1,"M"),"D"]}},
-	{aDay: {$lt: [new JOQULAR.Duration(2,"D"),"D"]}},
-	{aDay: {$lte: [new JOQULAR.Duration(1,"D"),"D"]}},
-	{aDay: {$eq: [new JOQULAR.Duration(1,"D"),"D"]}},
-	{aDay: {$eq: [new JOQULAR.Duration(1,"D"),"D"]}},
-	{aDay: {$neq: [new JOQULAR.Duration(2,"D"),"D"]}},
-	{aDay: {$gte: [new JOQULAR.Duration(1,"D"),"D"]}},
-	{aDay: {$gt: [new JOQULAR.Duration(23,"h"),"D"]}},
-	{anHour: {$lt: [new JOQULAR.Duration(1,"Y"),"Y"]}},
-	{anHour: {$lt: [new JOQULAR.Duration(1,"M"),"h"]}},
-	{anHour: {$lt: [new JOQULAR.Duration(1,"D"),"h"]}},
-	{anHour: {$lt: [new JOQULAR.Duration(2,"h"),"h"]}},
-	{anHour: {$lte: [new JOQULAR.Duration(1,"h"),"h"]}},
-	{anHour: {$eq: [new JOQULAR.Duration(1,"h"),"h"]}},
-	{anHour: {$eq: [new JOQULAR.Duration(1,"h"),"h"]}},
-	{anHour: {$neq: [new JOQULAR.Duration(2,"h"),"h"]}},
-	{anHour: {$gte: [new JOQULAR.Duration(1,"h"),"h"]}},
-	{anHour: {$gt: [new JOQULAR.Duration(59,"m"),"h"]}},
+	{aMillisecond: {$lt: {$self: '/aSecond'}}},
+	{aYear: {$lt: [new Duration(2,"Y"),"Y"]}},
+	{aYear: {$lte: [new Duration(1,"Y"),"Y"]}},
+	{aYear: {$eq: [new Duration(1,"Y"),"Y"]}},
+	{aYear: {$eq: [new Duration(1,"Y"),"M"]}},
+	{aYear: {$neq: [new Duration(2,"Y"),"Y"]}},
+	{aYear: {$gte: [new Duration(1,"Y"),"Y"]}},
+	{aYear: {$gt: [new Duration(11,"M"),"Y"]}},
+	{aMonth: {$lt: [new Duration(1,"Y"),"Y"]}},
+	{aMonth: {$lt: [new Duration(2,"M"),"M"]}},
+	{aMonth: {$lte: [new Duration(1,"M"),"M"]}},
+	{aMonth: {$eq: [new Duration(1,"M"),"M"]}},
+	{aMonth: {$eq: [new Duration(1,"M"),"M"]}},
+	{aMonth: {$neq: [new Duration(2,"M"),"M"]}},
+	{aMonth: {$gte: [new Duration(1,"M"),"M"]}},
+	{aMonth: {$gt: [new Duration(28,"D"),"M"]}},
+	{aDay: {$lt: [new Duration(1,"Y"),"Y"]}},
+	{aDay: {$lt: [new Duration(1,"M"),"D"]}},
+	{aDay: {$lt: [new Duration(2,"D"),"D"]}},
+	{aDay: {$lte: [new Duration(1,"D"),"D"]}},
+	{aDay: {$eq: [new Duration(1,"D"),"D"]}},
+	{aDay: {$eq: [new Duration(1,"D"),"D"]}},
+	{aDay: {$neq: [new Duration(2,"D"),"D"]}},
+	{aDay: {$gte: [new Duration(1,"D"),"D"]}},
+	{aDay: {$gt: [new Duration(23,"h"),"D"]}},
+	{anHour: {$lt: [new Duration(1,"Y"),"Y"]}},
+	{anHour: {$lt: [new Duration(1,"M"),"h"]}},
+	{anHour: {$lt: [new Duration(1,"D"),"h"]}},
+	{anHour: {$lt: [new Duration(2,"h"),"h"]}},
+	{anHour: {$lte: [new Duration(1,"h"),"h"]}},
+	{anHour: {$eq: [new Duration(1,"h"),"h"]}},
+	{anHour: {$eq: [new Duration(1,"h"),"h"]}},
+	{anHour: {$neq: [new Duration(2,"h"),"h"]}},
+	{anHour: {$gte: [new Duration(1,"h"),"h"]}},
+	{anHour: {$gt: [new Duration(59,"m"),"h"]}},
 	//aTimeSpan1 =  new JOQULAR.TimeSpan(new Date(2013,1,15,12,30,30,500),new Date(2015,1,15,12,30,30,500))
 	{aTimeSpan1: {starts: new Date(2013,1,15,12,30,30,500).valueOf(), ends: new Date(2015,1,15,12,30,30,500).valueOf()}},
-	{aTimeSpan1: {$coincident: {'..': 'aTimeSpan1'}}},
-	{aTimeSpan1: {$intersects: {'..': 'aTimeSpan2'}}},
-	{aTimeSpan1: {$intersects: {'..': 'aTimeSpan3'}}},
-	{aTimeSpan1: {$contains: {'..': 'aTimeSpan4'}}},
+	{aTimeSpan1: {$coincident: {$self: '../aTimeSpan1'}}},
+	{aTimeSpan1: {$intersects: {$self: '../aTimeSpan2'}}},
+	{aTimeSpan1: {$intersects: {$self: '../aTimeSpan3'}}},
+	{aTimeSpan1: {$contains: {$self: '../aTimeSpan4'}}},
 	{aTimeSpan2: {ends: Infinity}},
 	{aTimeSpan3: {starts: -Infinity}},
 	{aTimeSpan1: {$before: new Date(2016,1,15,12,30,30,500)}},
 	{aTimeSpan1: {$adjacentOrBefore: [new Date(2016,1,15,12,30,30,500),"Y"]}},
 	{aTimeSpan1: {$adjacentBefore: [new Date(2016,1,15,12,30,30,500),"Y"]}},
 	{aTimeSpan1: {$after: new Date(2012,1,15,12,30,30,500)}},
-	{aTimeSpan1: {$before: new JOQULAR.Time(Infinity)}},
-	{aTimeSpan1: {$after: new JOQULAR.Time(-Infinity)}},
+	{aTimeSpan1: {$before: new Time(Infinity)}},
+	{aTimeSpan1: {$after: new Time(-Infinity)}},
 	{aTimeSpan1: {$adjacent: [new Date(2016,1,15,12,30,30,500),"Y"]}},
 	{aOne: 1, $exists: function(object) { return object.aString!==null; }},
 	{aOne: 1, $forall: function(object) { return object.__proto__!==null; }},
@@ -329,15 +381,12 @@ var negativetests = [
 	{anObject: {aChildObject: {anotherString: "anotherstring"}}},
 	{anObject: {aChildObject: {aGrandChildObject: {anotherString: "anotherstring"}}}},
 	{anObject: {aChildObject: {aGrandChildObject: {anotherString: "anotherstring", aNaN: {$: isNaN}}}}},
-	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$neq: {'/': "aString"}}}}}}, // root
-	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$neq: {'/anObject': "anotherString"}}}}}}, // anObject
-	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$neq: {'/anObject.aChildObject': "anotherString"}}}}}}, // parent
-	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$neq: {'/anObject.aChildObject.aGrandChildObject': "anotherString"}}}}}}, // back down to self
-	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$neq: {'..': "anotherString"}}}}}}, // parent
-	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$neq: {'..aGrandChildObject': "anotherString"}}}}}}, // back down to self
-	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$neq: {'.': "anotherString"}}}}}}, // self
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$neq: {$self: '/aString'}}}}}},
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$neq: {$self: '/anObject/anotherString'}}}}}}, 
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$neq: {$self: '/anObject/aChildObject/anotherString'}}}}}},
+	{anObject: {aChildObject: {aGrandChildObject: {anotherString: {$neq: {$self: '../anotherString'}}}}}},
 	{anArray1: [5,6,7,8]},
-	{anArray1: {$count: 3}},
+	{anArray1: {count: 3}},
 	{anArray1: {$min: 0}},
 	{anArray1: {$avg: 10}},
 	{anArray1: {$eq: [5,6,7,8]}},
@@ -384,12 +433,12 @@ var negativetests = [
 	{aDate1: {$eq: [new Date(2014,0,15,12,35,0,500),"m"]}},
 	{aDate1: {$eq: [new Date(2014,0,15,12,30,35,250),"s"]}},
 	{aDate1: {$eq: [new Date(2014,0,15,12,30,30,250),"ms"]}},
-	{aTimeYear: new JOQULAR.Time(new Date(2013,1,15,12,30,30,500)).withPrecision("Y")},
-	{aTimeMonth: new JOQULAR.Time(new Date(2013,1,15,12,30,30,500)).withPrecision("M")},
-	{aTimeDay: new JOQULAR.Time(new Date(2013,1,15,12,30,30,500)).withPrecision("D")},
-	{aTimeHour: new JOQULAR.Time(new Date(2013,1,15,12,30,30,500)).withPrecision("h")},
-	{aTimeSecond: new JOQULAR.Time(new Date(2013,1,15,12,30,30,500)).withPrecision("s")},
-	{aTimeMillisecond: new JOQULAR.Time(new Date(2013,1,15,12,30,30,500)).withPrecision("ms")},
+	{aTimeYear: new Time(new Date(2013,1,15,12,30,30,500)).withPrecision("Y")},
+	{aTimeMonth: new Time(new Date(2013,1,15,12,30,30,500)).withPrecision("M")},
+	{aTimeDay: new Time(new Date(2013,1,15,12,30,30,500)).withPrecision("D")},
+	{aTimeHour: new Time(new Date(2013,1,15,12,30,30,500)).withPrecision("h")},
+	{aTimeSecond: new Time(new Date(2013,1,15,12,30,30,500)).withPrecision("s")},
+	{aTimeMillisecond: new Time(new Date(2013,1,15,12,30,30,500)).withPrecision("ms")},
 	{aTimeYear: {$neq: {'..': 'aTimeYear'}}},
 	{aTimeYear: {$gt: {'..': 'aTimeMonth'}}},
 	{aTimeMonth: {$gt: {'..': 'aTimeDay'}}},
@@ -404,321 +453,316 @@ var negativetests = [
 	{aMinute: {length: 60*2000}},
 	{aSecond: {length: 2000}},
 	{aMillisecond: {length: 2}},
-	{aYear: {$gt: [new JOQULAR.Duration(2,"Y"),"Y"]}},
-	{aYear: {$neq: [new JOQULAR.Duration(1,"Y"),"Y"]}},
-	{aYear: {$neq: [new JOQULAR.Duration(1,"Y"),"M"]}},
-	{aYear: {$eq: [new JOQULAR.Duration(2,"Y"),"Y"]}},
-	{aYear: {$lt: [new JOQULAR.Duration(11,"M"),"Y"]}},
-	{aMonth: {$gt: [new JOQULAR.Duration(1,"Y"),"Y"]}},
-	{aMonth: {$gt: [new JOQULAR.Duration(2,"M"),"M"]}},
-	{aMonth: {$gt: [new JOQULAR.Duration(1,"M"),"M"]}},
-	{aMonth: {$neq: [new JOQULAR.Duration(1,"M"),"M"]}},
-	{aMonth: {$eq: [new JOQULAR.Duration(2,"M"),"M"]}},
-	{aMonth: {$lt: [new JOQULAR.Duration(1,"M"),"M"]}},
-	{aMonth: {$lt: [new JOQULAR.Duration(28,"D"),"M"]}},
-	{aDay: {$gt: [new JOQULAR.Duration(1,"Y"),"Y"]}},
-	{aDay: {$gt: [new JOQULAR.Duration(1,"M"),"D"]}},
-	{aDay: {$gt: [new JOQULAR.Duration(2,"D"),"D"]}},
-	{aDay: {$gt: [new JOQULAR.Duration(1,"D"),"D"]}},
-	{aDay: {$neq: [new JOQULAR.Duration(1,"D"),"D"]}},
-	{aDay: {$neq: [new JOQULAR.Duration(1,"D"),"D"]}},
-	{aDay: {$eq: [new JOQULAR.Duration(2,"D"),"D"]}},
-	{aDay: {$lt: [new JOQULAR.Duration(1,"D"),"D"]}},
-	{aDay: {$lt: [new JOQULAR.Duration(23,"h"),"D"]}},
-	{anHour: {$gt: [new JOQULAR.Duration(1,"Y"),"Y"]}},
-	{anHour: {$gt: [new JOQULAR.Duration(1,"M"),"h"]}},
-	{anHour: {$gt: [new JOQULAR.Duration(1,"D"),"h"]}},
-	{anHour: {$gt: [new JOQULAR.Duration(2,"h"),"h"]}},
-	{anHour: {$gt: [new JOQULAR.Duration(1,"h"),"h"]}},
-	{anHour: {$neq: [new JOQULAR.Duration(1,"h"),"h"]}},
-	{anHour: {$neq: [new JOQULAR.Duration(1,"h"),"h"]}},
-	{anHour: {$eq: [new JOQULAR.Duration(2,"h"),"h"]}},
-	{anHour: {$lt: [new JOQULAR.Duration(1,"h"),"h"]}},
-	{anHour: {$lt: [new JOQULAR.Duration(59,"m"),"h"]}},
+	{aYear: {$gt: [new Duration(2,"Y"),"Y"]}},
+	{aYear: {$neq: [new Duration(1,"Y"),"Y"]}},
+	{aYear: {$neq: [new Duration(1,"Y"),"M"]}},
+	{aYear: {$eq: [new Duration(2,"Y"),"Y"]}},
+	{aYear: {$lt: [new Duration(11,"M"),"Y"]}},
+	{aMonth: {$gt: [new Duration(1,"Y"),"Y"]}},
+	{aMonth: {$gt: [new Duration(2,"M"),"M"]}},
+	{aMonth: {$gt: [new Duration(1,"M"),"M"]}},
+	{aMonth: {$neq: [new Duration(1,"M"),"M"]}},
+	{aMonth: {$eq: [new Duration(2,"M"),"M"]}},
+	{aMonth: {$lt: [new Duration(1,"M"),"M"]}},
+	{aMonth: {$lt: [new Duration(28,"D"),"M"]}},
+	{aDay: {$gt: [new Duration(1,"Y"),"Y"]}},
+	{aDay: {$gt: [new Duration(1,"M"),"D"]}},
+	{aDay: {$gt: [new Duration(2,"D"),"D"]}},
+	{aDay: {$gt: [new Duration(1,"D"),"D"]}},
+	{aDay: {$neq: [new Duration(1,"D"),"D"]}},
+	{aDay: {$neq: [new Duration(1,"D"),"D"]}},
+	{aDay: {$eq: [new Duration(2,"D"),"D"]}},
+	{aDay: {$lt: [new Duration(1,"D"),"D"]}},
+	{aDay: {$lt: [new Duration(23,"h"),"D"]}},
+	{anHour: {$gt: [new Duration(1,"Y"),"Y"]}},
+	{anHour: {$gt: [new Duration(1,"M"),"h"]}},
+	{anHour: {$gt: [new Duration(1,"D"),"h"]}},
+	{anHour: {$gt: [new Duration(2,"h"),"h"]}},
+	{anHour: {$gt: [new Duration(1,"h"),"h"]}},
+	{anHour: {$neq: [new Duration(1,"h"),"h"]}},
+	{anHour: {$neq: [new Duration(1,"h"),"h"]}},
+	{anHour: {$eq: [new Duration(2,"h"),"h"]}},
+	{anHour: {$lt: [new Duration(1,"h"),"h"]}},
+	{anHour: {$lt: [new Duration(59,"m"),"h"]}},
 	{aTimeSpan1: {$disjoint: {'..': 'aTimeSpan2'}}},
 	{aTimeSpan1: {$disjoint: {'..': 'aTimeSpan3'}}},
 	{aTimeSpan1: {$disjoint: {'..': 'aTimeSpan4'}}},
 	{aTimeSpan2: {ends: -Infinity}},
 	{aTimeSpan3: {starts: Infinity}},
-	//{aString: "astring", $exists: function(object) { return  object.__proto__===null; }},
-	//{aString: "astring", $forall: function(object) { return  object.__proto__===null; }},
+	{aString: "astring", $exists: function(object) { return object.aString===null; }},
+	{aString: "astring", $forall: function(object) { return object.__proto_===null; }}
 ];
 negativetests.run = [];
 
-console.time("test");
-var passed = 0, failed = 0;
-positivetests.forEach(function(pattern,i) {
-	if(positivetests.run.length === 0 || positivetests.run.indexOf(i)>=0) {
-		if(to.joqularMatch(pattern) === to) {
-			passed++;
-			if(LOGSUCCESS) console.log("Passed Positive Match Test: " + i + " " + JSON.stringify(pattern));
-		} else {
-			failed++;
-			console.log("Failed Positive Match Test: " + i + " " + JSON.stringify(pattern));
-		}
-	}
-});
-negativetests.forEach(function(pattern,i) {
-	if(negativetests.run.length === 0 || negativetests.run.indexOf(i)>=0) {
-		var result = to.joqularMatch(pattern);
-		if(!result) {
-			passed++;
-			if(LOGSUCCESS) console.log("Passed Negative Match Test: " + i + " " + JSON.stringify(pattern));
-		} else {
-			failed++;
-			console.log("Failed Negative Match Test: " + i + " " + JSON.stringify(pattern) + " " + JSON.stringify(result));
-		}
-	}
-});
-positivetests.forEach(function(pattern,i) {
-	if(positivetests.run.length === 0 || positivetests.run.indexOf(i)>=0) {
-		var result = Object.joqularFind(pattern)
-		if(result.length>0) {
-			passed++;
-			if(LOGSUCCESS) console.log("Passed Positive Find Test: " + i + " " + JSON.stringify(pattern));
-		} else {
-			failed++;
-			console.log("Failed Positive Find Test: " + i + " " + JSON.stringify(pattern));
-		}
-	}
-});
-negativetests.forEach(function(pattern,i) {
-	if(negativetests.run.length === 0 || negativetests.run.indexOf(i)>=0) {
-		var result = Object.joqularFind(pattern)
-		if(result.length===0) {
-			passed++;
-			if(LOGSUCCESS) console.log("Passed Negative Find Test: " + i + " " + JSON.stringify(pattern));
-		} else {
-			failed++;
-			console.log("Failed Negative Find Test: " + i + " " + JSON.stringify(pattern) + " " + JSON.stringify(result));
-		}
-	}
-});
-positivetests.forEach(function(pattern,i) {
-	if(positivetests.run.length === 0 || positivetests.run.indexOf(i)>=0) {
-		var promise = Object.joqularFind(pattern,true);
-		promise.then(function(result) {
-			if(result.length>0) {
-				passed++;
-				if(LOGSUCCESS) console.log("Passed Promise Positive Find Test: " + i + " " + JSON.stringify(pattern));
-			} else {
-				failed++;
-				console.log("Failed Promise Positive Find Test: " + i + " " + JSON.stringify(pattern));
-			}
-		});
-	}
-});
-negativetests.forEach(function(pattern,i) {
-	if(negativetests.run.length === 0 || negativetests.run.indexOf(i)>=0) {
-		var promise = Object.joqularFind(pattern,true)
-		promise.then(function(result) {
-			if(result.length===0) {
-				passed++;
-				if(LOGSUCCESS) console.log("Passed Promise Negative Find Test: " + i + " " + JSON.stringify(pattern));
-			} else {
-				failed++;
-				console.log("Failed Promise Negative Find Test: " + i + " " + JSON.stringify(pattern) + " " + JSON.stringify(result));
-			}
-		});
-	}
-});
-
-
-function AsyncObject(id) {
-	this.id = id;
-}
-function PromiseObject(id) {
-	this.id = id;
-}
-function Person(name,age,gender,married,zipcode) {
-	this.name = name;
-	this.age = age;
-	this.gender = gender;
-	this.married = married;
-	if(zipcode) {
-		this.address = {zipcode: zipcode};
-	}
-}
-Person.prototype.getName = function() { return this.name; }
-
-Person = JOQULAR.createIndex(Person,false);
-AsyncObject = JOQULAR.createIndex(AsyncObject,function(instance) { console.log(instance); })
-PromiseObject = JOQULAR.createIndex(PromiseObject,true,true);
-
-var p1 = new Person('Bill',54,'male',false);
-p1.faith = 'Catholic';
-var p2 = new Person('Mary',54,'female',false);
-p2.faith = 'Catholic';
-var results = Person.joqularFind({name: 'Bill'});
-if(results.length===0) {
-	passed++;
-	if(LOGSUCCESS) console.log("Passed Negative Find Unindexed");
-} else {
-	failed++;
-	console.log("Failed Negative Find Unindexed");
-}
-Person.joqularIndex(p1);
-Person.joqularIndex(p2);
-results = Person.joqularFind({name: 'Bill'});
-if(results.length>0) {
-	passed++;
-	if(LOGSUCCESS) console.log("Passed Find Manually Indexed");
-} else {
-	failed++;
-	console.log("Failed Find Manually Indexed");
-}
-for(var i=0;i<100;i++) {
-	var p = new Person("Person"+i ,Math.round(Math.random() * 100)+1, (Math.random()>=.5 ? "male" : "female"), (Math.random()>=.5 ? true : false),(i % 2 === 0 ? 98110 : 98101));
-	Person.joqularIndex(p);
-}
-
-var a1 = new AsyncObject(10);
-var p1 = new PromiseObject(10).then(function(instance) { passed++;if(LOGSUCCESS) console.log("Passed Promise Based Object Creation " + JSON.stringify(instance)); });
-AsyncObject.joqularFind({id: 10},function(err,results) { if(!err) { passed++;if(LOGSUCCESS) console.log("Passed Asynch Find " + JSON.stringify(results)); } else { failed++; console.log("Failed Asynch Find " + JSON.stringify(err)); }});
-var r2 = PromiseObject.joqularFind({id: 10},true).then(function(results) { passed++;if(LOGSUCCESS) console.log("Passed Promise Based Find " + JSON.stringify(results)); });
-
 var querytests = [
-	[JOQULAR.select().first(1).from({p1: Person}),1],
-	[JOQULAR.select().first(3).from({p1: Person}),3],
-	[JOQULAR.select().last(1).from({p1: Person}),1],
-	[JOQULAR.select().last(3).from({p1: Person}),3],
-	[JOQULAR.select().last(2).sample(1).from({p1: Person}),1],
-	[JOQULAR.select().last(2).sample(2).from({p1: Person}),2],
-	[JOQULAR.select().last(2).sample(.10).from({p1: Person}),2],
-	[JOQULAR.select().last(2).sample(.5).from({p1: Person}),2],
-	[JOQULAR.select().last(2).sample(.75).from({p1: Person}),2],
-	[JOQULAR.select().sample(10,true).from({p1: Person}),10],
-	[JOQULAR.select().sample(.5).from({p1: Person}),51],
-	[JOQULAR.select().from({p1: Person}).where({p1: {$exists: function(o) { return o.age > 0}}}),102],
-	[JOQULAR.select().from({p1: Person}).where({p1: {$forall: function(o) { return o.age > 0}}}),102],
-	[JOQULAR.select().from({p1: Person}).where({p1: {name: 'Bill', age: {$between:[53,55]}}}),1],
-	[JOQULAR.select().from({p1: Person}).where({p1: {name: 'Bill', age: {$outside:[18,20]}}}),1],
-	[JOQULAR.select().from({p1: Person, p2: Person}).where({p2: {faith: {$eq: {p1: 'faith'}}, gender: {$neq: {p1: 'gender'}}}}),2],
-	[JOQULAR.select({firstName: {p1: 'name'}}).from({p1: Person}).where({p1: {name: 'Bill'}}),function(results) { return results.length===1 && results[0][0].firstName==='Bill'}],
-	[JOQULAR.select({zipcode: {p1: 'address.zipcode'}}).from({p1: Person}).where({p1: {address: {zipcode: 98110}}}),function(results) { return results.length===50 && results[0][0].zipcode===98110}],
-	[JOQULAR.select().from({p1: Person, p2: Person}),10404],
-	[JOQULAR.select().from({p1: Person, p2: Person}).where({p1: {name: {$eq: {p2: 'name'}}}}),102],
+	[JOQULAR.select().from({e1: Entity}),3],
+	[JOQULAR.select().first(1).from({e1: Entity}),1],
+	[JOQULAR.select().last(1).from({e1: Entity}),1],
+	[JOQULAR.select().first(1).last(1).from({e1: Entity}),2],
+	[JOQULAR.select().first(.34).from({e1: Entity}),1],
+	[JOQULAR.select().last(.34).from({e1: Entity}),1],
+	[JOQULAR.select().first(.34).last(.34).from({e1: Entity}),2],
+	[JOQULAR.select().last(2).sample(1).from({e1: Entity}),1],
+	[JOQULAR.select().last(2).sample(2).from({e1: Entity}),2],
+	[JOQULAR.select().sample(.66).from({e1: Entity}),2],
+	[JOQULAR.select().from({e1: Entity}).orderBy({'e1.name':'desc'}),function(results) { return results.length===3 && results[0][0].name==="to3"}],
+	[JOQULAR.select({'e1.name': {as: 'Name'}}).from({e1: Entity}),function(results) { return results.length===3 && results[0].Name==="to1"}],
+	[JOQULAR.select({'e1.name': {as: 'Name', format:function(value) { return value.toUpperCase(); }}}).from({e1: Entity}),function(results) { return results.length===3 && results[0].Name==="TO1"}]
 ];
 querytests.run = [];
 
-querytests.forEach(function(test,i) {
-	if(querytests.run.length === 0 || querytests.run.indexOf(i)>=0) {
-		var query = test[0];
-		var expected = test[1];
-		var result = query.exec();
-		if((typeof(expected)==="number" && result.length===expected) || (typeof(expected)==="function" && expected(result))) {
-			passed++;
-			if(LOGSUCCESS) console.log("Passed Query Test: " + i + " " + JSON.stringify(query));
-		} else {
-			failed++;
-			console.log("Failed Query Test: " + i + " " + JSON.stringify(query) + " Expected: " + expected + " Found: " + result.length + " " + JSON.stringify(result));
+var promises = [];
+console.time("test");
+var passed = 0, failed = 0;
+positivetests.forEach(function(pattern,i) {
+	if(RUNTEST==null || RUNTEST===i) {
+		if(positivetests.run.length === 0 || positivetests.run.indexOf(i)>=0) {
+			var promise = to1.joqularMatch(pattern);
+			promises.push(promise);
+			promise.then(function(result) {
+				if(result.length===1) {
+					passed++;
+					if(LOGSUCCESS) console.log("Passed Positive Match Test: " + i + " " + JSON5.stringify(pattern));
+				} else {
+					failed++;
+					console.log("Failed Positive Match Test: " + i + " " + JSON5.stringify(pattern));
+				}
+			});
+		}
+	}
+});
+negativetests.forEach(function(pattern,i) {
+	if(RUNTEST==null || RUNTEST===i) {
+		if(negativetests.run.length === 0 || negativetests.run.indexOf(i)>=0) {
+			var promise = to1.joqularMatch(pattern);
+			promises.push(promise);
+			promise.then(function(result) {
+				if(result.length===0) {
+					passed++;
+					if(LOGSUCCESS) console.log("Passed Negative Match Test: " + i + " " + JSON5.stringify(pattern));
+				} else {
+					failed++;
+					console.log("Failed Negative Match Test: " + i + " " + JSON5.stringify(pattern));
+				}
+			});
+		}
+	}
+});
+
+positivetests.forEach(function(pattern,i) {
+	if(RUNTEST==null || RUNTEST===i) {
+		if(positivetests.run.length === 0 || positivetests.run.indexOf(i)>=0) {
+			var promise = Entity.find(pattern);
+			promises.push(promise);
+			promise.then(function(result) {
+				if(result.length>0) {
+					passed++;
+					if(LOGSUCCESS) console.log("Passed Positive Find Test: " + i + " " + JSON5.stringify(pattern));
+				} else {
+					failed++;
+					console.log("Failed Positive Find Test: " + i + " " + JSON5.stringify(pattern));
+				}
+			});
+		}
+	}
+});
+
+negativetests.forEach(function(pattern,i) {
+	if(RUNTEST==null || RUNTEST===i) {
+		if(negativetests.run.length === 0 || negativetests.run.indexOf(i)>=0) {
+			var promise = Entity.find(pattern);
+			promises.push(promise);
+			promise.then(function(result) {
+				if(result.length===0) {
+					passed++;
+					if(LOGSUCCESS) console.log("Passed Negative Find Test: " + i + " " + JSON5.stringify(pattern));
+				} else {
+					failed++;
+					console.log("Failed Negative Find Test: " + i + " " + JSON5.stringify(pattern) + " " + JSON5.stringify(result));
+				}
+			});
 		}
 	}
 });
 
 positivetests.forEach(function(test,i) {
-	if(positivetests.run.length === 0 || positivetests.run.indexOf(i)>=0) {
-		var query = JOQULAR.select().from({o1: Object}).where({o1: test});
-		var result = query.exec();
-		if(result.length===1) {
-			passed++;
-			if(LOGSUCCESS) console.log("Passed Positive Pattern Query Test: " + i + " " + JSON.stringify(query));
-		} else {
-			failed++;
-			console.log("Failed Positive Pattern Query Test: " + i + " " + JSON.stringify(query) + " Expected: 1 Found: " + result.length + " " + JSON.stringify(result));
+	if(RUNTEST==null || RUNTEST===i) {
+		if(positivetests.run.length === 0 || positivetests.run.indexOf(i)>=0) {
+			var query = JOQULAR.select().from({e1: Entity}).where({e1: test});
+			var promise = query.exec();
+			promise.then(function(result) {
+				if(result.length>=1) {
+					passed++;
+					if(LOGSUCCESS) console.log("Passed Positive Pattern Query Test: " + i + " " + JSON5.stringify(query));
+				} else {
+					failed++;
+					console.log("Failed Positive Pattern Query Test: " + i + " " + JSON5.stringify(query) + " Expected: 1 Found: " + result.length + " " + JSON5.stringify(result));
+				}
+			});
+		}
+	}
+});
+
+negativetests.forEach(function(test,i) {
+	if(RUNTEST==null || RUNTEST===i) {
+		if(negativetests.run.length === 0 || negativetests.run.indexOf(i)>=0) {
+			var query = JOQULAR.select().from({e1: Entity}).where({e1: test});
+			var promise = query.exec();
+			promise.then(function(result) {
+				if(result.length===0) {
+					passed++;
+					if(LOGSUCCESS) console.log("Passed Negative Pattern Query Test: " + i + " " + JSON5.stringify(query));
+				} else {
+					failed++;
+					console.log("Failed Negative Pattern Query Test: " + i + " " + JSON5.stringify(query) + " Expected: 1 Found: " + result.length + " " + JSON5.stringify(result));
+				}
+			});
 		}
 	}
 });
 
 querytests.forEach(function(test,i) {
-	if(querytests.run.length === 0 || querytests.run.indexOf(i)>=0) {
-		var query = test[0];
-		var expected = test[1];
-		var promise = query.exec(true);
-		promise.then(function(result) {
-			if((typeof(expected)==="number" && result.length===expected) || expected(result)) {
-				passed++;
-				if(LOGSUCCESS) console.log("Passed Promise Query Test: " + i + " " + JSON.stringify(query));
-			} else {
-				failed++;
-				console.log("Failed Promise Query Test: " + i + " " + JSON.stringify(query) + " Expected: " + expected + " Found: " + result.length + " " + JSON.stringify(result));
-			}
-		});
+	if(RUNTEST==null || RUNTEST===i) {
+		if(querytests.run.length === 0 || querytests.run.indexOf(i)>=0) {
+			var promise = test[0].exec();
+			var expected = test[1];
+			promise.then(function(result) {
+				if(result.length===expected || (typeof(expected)==="function" && expected(result))) {
+					passed++;
+					if(LOGSUCCESS) console.log("Passed Query Test Test: " + i + " " + JSON5.stringify(test[0]));
+				} else {
+					failed++;
+					console.log("Failed Query Test: " + i + " " + JSON5.stringify(test[0]) + " Expected: " + expected + " Found: " + result.length + " " + JSON5.stringify(result));
+				}
+			});
+		}
 	}
 });
 
-var results = JOQULAR.select({name: {p1: 'name'}, age: {p1: 'age'}, zipcode: {p1: 'address.zipcode'}}).first(1).from({p1: Person}).orderBy({'p1.age':'asc'}).exec();
-if(Object.keys(results[0][0]).length===3 && results[0][0].name!==undefined && results[0][0].zipcode!==undefined && results[0][0].age!==undefined) {
+/*
+var i1 = JOQULAR.insert().into(Person).keys(['name','age']).values(['Zane',24]).exec();
+if(i1 instanceof Person && i1.name=='Zane' && i1.age==24) {
 	passed++;
-	if(LOGSUCCESS) console.log("Passed Projection Test");
+	if(LOGSUCCESS) console.log("Passed Values Insert Test");
 } else {
 	failed++;
-	console.log("Failed Projection Test " + JSON.stringify(results));
+	console.log("Failed Values Insert Test " + JSON5.stringify(i1));
 }
-results = JOQULAR.select().from({p1: Person,p2: Person}).where({p2: {gender: {$neq: {p1: 'gender'}}}}).exec();
-var sampleresults = JOQULAR.select().sample(.90,.03,true).from({p1: Person,p2: Person}).where({p2: {gender: {$neq: {p1: 'gender'}}}}).exec();
-if(sampleresults.length<results.length) {
+var i2 = JOQULAR.insert().into(Person).object([{name:'Tyler',age:22}]).exec();
+if(i2[0] instanceof Person && i2[0].name==='Tyler' && i2[0].age==22) {
 	passed++;
-	if(LOGSUCCESS) console.log("Passed Sample Test");
+	if(LOGSUCCESS) console.log("Passed Object Insert Test");
 } else {
 	failed++;
-	console.log("Failed Sample Test - Expected Less Than: " + results.length + " Found: " + sampleresults.length);
+	console.log("Failed Values Insert Test " + JSON5.stringify(i2));
 }
-results = JOQULAR.select().from({p1: Person}).orderBy({'p1.age':'asc','p1.gender':'asc'}).exec();
-if(results.every(function(row,i) {
-	if(i===0) return true;
-	return row[0].age > results[i-1][0].age || (row[0].age === results[i-1][0].age && row[0].gender >= results[i-1][0].gender);
-})) {
+
+
+var ostring1 = JSON5.stringify(Object.index.keys.joqularIdMap[0]);
+Object.index.flush(0);
+var ostring2 = JSON5.stringify(Object.index.keys.joqularIdMap[0]);
+Object.index.restore(0);
+var ostring3 = JSON5.stringify(Object.index.keys.joqularIdMap[0]);
+if(ostring2=="1" && ostring1==ostring3) {
 	passed++;
-	if(LOGSUCCESS) console.log("Passed Sort Test 1");
+	if(LOGSUCCESS) console.log("Passed Flush Test");
 } else {
 	failed++;
-	console.log("Failed Sort Test 1");
+	console.log("Failed Flush Test " + ostring1 + " != " + ostring3);
 }
-results = JOQULAR.select().from({p1: Person}).orderBy({'p1.age':'desc','p1.gender':'asc'}).exec();
-if(results.every(function(row,i) {
-	if(i===0) return true;
-	return row[0].age < results[i-1][0].age || (row[0].age === results[i-1][0].age && row[0].gender >= results[i-1][0].gender);
-})) {
-	passed++;
-	if(LOGSUCCESS) console.log("Passed Sort Test 2");
-} else {
-	failed++;
-	console.log("Failed Sort Test 2");
+
+*/
+
+Promise.all(promises).then(function() {
+	console.log("Completed " + (passed+failed) + " synchronous tests. Passed: " + passed + " Failed: " + failed + " " + (LOGSUCCESS ?  "To show only failures, set LOGSUCCESS = false" : "To see all results including asynchronous tests, set LOGSUCCESS = true") + " at top of file.");
+	console.timeEnd("test");
+});
+
+JOQULAR.clear();
+var db = JOQULAR.db("Test");
+var start =  window.performance.now();
+var testobjects = db.collection("Entity",{schema:EntitySchema});
+var loaded =  window.performance.now();
+console.log("Load Time:",loaded-start);
+testobjects.clear();
+var cleared =  window.performance.now();
+console.log("Clear Time:",cleared-loaded);
+testobjects.stream(false);
+var find = Math.floor((Math.random() * 100) + 1)
+var i = 500; //5000; //10000;
+var start =  window.performance.now();
+for(var j=0;j<i;j++) {
+	new Entity().setData({testId:Math.floor((Math.random() * 100) + 1)});
 }
-results = JOQULAR.select().from({p1: Person}).orderBy({'p1.address.zipcode':'asc','p1.age':'asc'}).exec();
-if(results.every(function(row,i) {
-	if(i===0) return true;
-	return !row[0].address || ! results[i-1][0].address || row[0].address.zipcode > results[i-1][0].address.zipcode || (row[0].address.zipcode === results[i-1][0].address.zipcode && row[0].age >= results[i-1][0].age);
-})) {
-	passed++;
-	if(LOGSUCCESS) console.log("Passed Sort Test 3");
-} else {
-	failed++;
-	console.log("Failed Sort Test 3");
+var created =  window.performance.now();
+console.log("Create Time:",created-cleared);
+var save = testobjects.save();
+save.then(function(err) {
+	if(err) {
+		console.log(err);
+	}
+	var saved =  window.performance.now();
+	console.log("Save Time:",saved-created);
+});
+var startselect = window.performance.now();
+var select = JOQULAR.select().from({p1: 'Entity'}).where({p1: {testId: find}}).exec();
+select.then(function(results) {
+	var selected =  window.performance.now();
+	console.log("Select Time:",selected-startselect,results.length);
+});
+var startreselect = window.performance.now();
+var reselect = JOQULAR.select().from({p1: 'Entity'}).where({p1: {testId: find}}).exec();
+reselect.then(function(results) {
+	var reselected =  window.performance.now();
+	console.log("Reselect Time:",reselected-startreselect,results.length);
+});
+var startidfind = window.performance.now();
+var ids = Entity.findIds({testId: find});
+var idsfound = window.performance.now();;
+console.log("Id Find Time:",idsfound-startidfind,ids.length);
+var startfind = window.performance.now();
+var os = Entity.find({testId: find},function(err,cached) { console.log("Cached Find Time:",window.performance.now()-startfind,cached.length) });
+os.then(function(results) {
+	var found = window.performance.now();;
+	console.log("Object Find Time:",found-startfind,results.length);
+});
+var startflush =  window.performance.now();
+testobjects.flush();
+var flushed =  window.performance.now();
+console.log("Flush Time:",flushed-startflush);
+var startrefind = window.performance.now();
+var ros = Entity.find({testId: find},function(err,cached) { console.log("Cached Refind Time:",window.performance.now()-startfind,cached.length) });
+ros.then(function(results) {
+	var refound = window.performance.now();;
+	console.log("Refind Time:",refound-startrefind,results.length);
+});
+testobjects.flush();
+var startload =  window.performance.now();
+var load = JOQULAR.select().from({p1: 'Entity'}).where({p1: {testId: find}}).exec();
+load.then(function(results) {
+	var loaded =  window.performance.now();
+	console.log("Load Time:",loaded-startload,results.length);
+});
+
+/*
+var client;
+try {
+	client = new Faye.Client('http://localhost:3000/joqular');
+} catch(e) {
+	console.log("Unable to connect to remote database. Data will be synched at a later time.");
 }
-console.log("Completed " + (passed+failed) + " synchronous tests. Passed: " + passed + " Failed: " + failed + " " + (LOGSUCCESS ?  "To show only failures, set LOGSUCCESS = false" : "To see all results including asynchronous tests, set LOGSUCCESS = true") + " at top of file.");
-console.timeEnd("test");
-
-console.log(JOQULAR.insert().into(Person).keys(['name','age']).values(['Zane',24]).exec());
-console.log(JOQULAR.insert().into(Person).object([{name:'Tyler',age:22}]).exec());
-
-// create a non-enumerable sub object with all the joqular functions on it!! push index down also??
-console.log(Person.index.joqularIdMap[1]);
-Person.index.flush(1);
-console.log(Person.index.joqularIdMap[1]);
-console.log(Person.index.restore(1));
-console.log(Person.index.joqularIdMap[1]);
-
-// drop indexedDB ... go right to local storage and store just indexes!
-
-// copy all impacted to snapshot.<impacted>
-// update indexes
-// save indexes to local store
-// if all save, delete snapshot, else restore indexes
-
-//Inverted Value Store - Index stores sufficient info to recover all records/documents because all properties of all documents are indexed
-
+client.subscribe("/joqular",function(message) {
+	console.log(message);
+});
+// establish a unique communication channel id
+db.channel = "/joqular/" + (Session.get("channel") ? Session.get("channel") : Session.set("channel",uuid.v4()));
+var privatesubscription = client.subscribe(db.channel,function(message) {
+	if(message.source!==db.channel) {
+		console.log("-->",db.channel,message);
+	}
+});
+client.publish(db.channel,{text:'hello'});
+*/
 	
 </script>
 

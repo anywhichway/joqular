@@ -1,6 +1,6 @@
 {
   "name": "joqular",
-  "version":"1.02.01",
+  "version":"2.0.0",
   "description": "(JOQULAR - JavaScript Object Query Language Representation) A high speed in-memory, isomorphic, JavaScript database wih serializable queries.",
   "main": "joqular.js",
   "scripts": {
