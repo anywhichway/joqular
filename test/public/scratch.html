@@ -1,0 +1,81 @@
+<html>
+<body>
+<script>
+var _createObject = Object.createObject;
+Object.createObject = function(prototype,properties) {
+	var object = _createObject(prototype,properties);
+	if(prototype.index) {
+		prototype.index.index(object);
+	}
+	return object;
+}
+function Index() {
+
+}
+Index.prototype.index = function(instance,async) {
+	console.log("Indexed " + JSON.stringify(instance));
+	return instance;
+}
+Object.joqularIndexes = {};
+Object.prototype.createIndex = function(cons,auto,async) {
+	if(cons.index) {
+		return cons;
+	}
+	if(["Boolean","Number","String"].indexOf(cons.name)>=0) {
+		cons.index = new Index();
+		cons.index.index(new cons());
+		return cons;
+	}
+	var newcons = Function("cons","return function " + cons.name + "() {var me=this; cons.apply(me,arguments); return (" + auto + "? " + cons.name + ".index.index(me,"+ async +") : me); }")(cons);
+	newcons.index = new Index();
+	var keys = Object.getOwnPropertyNames(cons);
+	keys.forEach(function(key) {
+		newcons[key] = cons[key];
+	});
+	Object.joqularIndexes[cons.name] = newcons;
+	return newcons;
+}					
+Object = Object.prototype.createIndex(Object,true);
+
+var to = {name: "Simon"};
+
+function Person(name) {
+	this.name = name;
+}
+Person = Object.createIndex(Person,true);
+
+var po = new Person("Simon");
+
+</script>
+
+first convert String to hash .. store that for initial match ... then compare all stored strings at hash to the one being looked for
+
+PUT Person/name/String/Bill/0/some abitrary string
+PUT Person/name/String/<hash>/0/some abitrary string
+Person/name/String/<hash>/0/string.txt
+
+String.prototype.hash = function(){for(var r=0,i=0;i<this.length;i++)r=(r<<5)-r+this.charCodeAt(i),r&=r;return r};
+
+/OrgId/ProjectId/index/ClassName/Property/ClassName/FKey/[Ids]
+/OrgId/ProjectId/index/ClassName/Property/TypeName/Value/[Ids]
+/OrgId/ProjectId/object/Id
+
+/joqular
+../db
+../index
+../journal
+
+write to journal.tmp
+ren .tmp to .txt
+write to db
+write to index
+del .txt
+
+rebuild from database
+rebuild from index
+
+what about long strings will illegal char in string for file name
+
+
+
+</html>

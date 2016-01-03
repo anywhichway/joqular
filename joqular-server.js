@@ -1,7 +1,21 @@
 var http = require('http');
+var express = require('express');
 var util = require('util');
 var faye = require('faye');
-var uuid = require('uuid');
+var Proxy = require('./javascript/chrome-proxy.js');
+require('./javascript/proxy-observe.js');
+var JSON5 = require('./javascript/json5-ex.js');
+var generic = require('./javascript/generic.js');
+var Schema = require('./javascript/schema.js');
+var NOM = require('./javascript/nom.js');
+var uuid = require('./javascript/uuid.js');
+require('./javascript/es6-promise.min.js');
+require('./javascript/es6-collections.min.js');
+require('./javascript/object-ex.js');
+var Time = require('./javascript/about-time.js').Time;
+var Duration = require('./javascript/about-time.js').Duration;
+var TimeSpan = require('./javascript/about-time.js').TimeSpan;
+
 
 var bayeux = new faye.NodeAdapter({mount: '/joqular', timeout: 45});
 var channelId = uuid.v4();

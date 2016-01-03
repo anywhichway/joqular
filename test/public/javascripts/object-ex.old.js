@@ -1,4 +1,9 @@
-(function(exports) {
+(function() {
+	"use strict";
+	var _global = this;
+	var Time = require('about-time').Time;
+	var Duration = require('about-time').Duration;
+	var TimeSpan = require('about-time').TimeSpan;
 	/*
 	 * https://github.com/Benvie
 	 * improvements 2015 by AnyWhichWay
@@ -380,8 +385,14 @@
 		}
 		return new Time(this,precision).valueOf() == new Time(value,precision).valueOf();
 	}
+	Date.prototype.eeq = function(value) {
+		return this===value;
+	}
 	Date.prototype.neq = function(value,precision) {
 		return new Time(this,precision).valueOf() !== new Time(value,precision).valueOf();
+	}
+	Date.prototype.neeq = function(value) {
+		return this!==value;
 	}
 	Date.prototype.gte = function(value,precision) {
 		if(value instanceof TimeSpan) {
@@ -420,4 +431,4 @@
 		}
 		return this.eq(value,precision);
 	}
-})("undefined"!=typeof exports&&"undefined"!=typeof global?global:window);
+}).call(this);

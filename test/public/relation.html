@@ -1,0 +1,355 @@
+<html>
+<head>
+<script src="../joqular.js" type="text/javascript"></script>
+</head>
+<body>
+
+<script type="text/javascript">
+"use strict";
+function getName() { return 'Simon'; }
+getName.deferred=true;
+Object = JOQULAR.enhance(Object,{enhancePrimitives:true,enhanceArray:true,enhanceSet:true,enhanceDate:true,index:true,datastore:{name:"JOQULARTest",type:"IndexedDB"}});
+var TimeSpan = JOQULAR.TimeSpan;
+var d1 = new Date();
+var d2 = new Date();
+d2.setTime(d1.getTime()+(24*60*60));
+var d3 = new Date();
+d3.setTime(d2.getTime()+(24*60*60));
+var du4 = new TimeSpan();
+du4.startingTime = d3.getTime();
+var o = {name: 'Simon', number: 1, array1: [1,2,3], array2: [4,5,6], child: {name: 'Simon', child: {name: 'Simon'}}, sibling: {child: {name: 'Simon'}}, duration0: new TimeSpan(d1), duration1: new TimeSpan(d1,d2), duration2: new TimeSpan(d2,d3), duration3: new TimeSpan(d3), duration4: du4};
+console.log(o.joqularMatch({name: 'Simon'}));
+console.log(o.joqularMatch({name: isNaN}));
+console.log(o.joqularMatch({name: {$: isNaN, eq: 'Simon'}}));
+console.log(o.joqularMatch({name: getName}));
+console.log(o.joqularMatch({name: {eq: getName}}));
+console.log(o.joqularMatch({name: {eq: {'.': 'name'}}}));
+console.log(o.joqularMatch({name: {eq: {'/': 'name'}}})); // /field.name.name
+console.log(o.joqularMatch({child: {name: {eq: 'Simon'}}}));
+console.log(o.joqularMatch({child: {name: {eq: {'..sibling.child': 'name'}}}}));
+console.log(o.joqularMatch({child: {name: {eq: {'/': 'name'}}}}));
+console.log(o.joqularMatch({child: {name: {eq: {'/sibling.child': 'name'}}}}));
+console.log(o.joqularMatch({name: {eq: 'Simon'}}));
+console.log(o.joqularMatch({name: {neq: 'Joe'}}));
+console.log(o.joqularMatch({number: 1}));
+console.log(o.joqularMatch({number: {eq: 1}}));
+console.log(o.joqularMatch({number: {neq: 0}}));
+console.log(o.joqularMatch({number: {gt: 0}}));
+console.log(o.joqularMatch({number: {gte: 0}}));
+console.log(o.joqularMatch({number: {gte: 1}}));
+console.log(o.joqularMatch({number: {lt: 2}}));
+console.log(o.joqularMatch({number: {lte: 1}}));
+console.log(o.joqularMatch({number: {lte: 2}}));
+console.log(o.joqularMatch({array1: [1,2,3]}));
+console.log(o.joqularMatch({array1: [4,5,6]})); // null expected
+console.log(o.joqularMatch({array1: {eq: [1,2,3]}}));
+console.log(o.joqularMatch({array1: {neq: [0,1,2]}}));
+console.log(o.joqularMatch({array1: {intersects: [0,1,2]}}));
+console.log(o.joqularMatch({array1: {intersects: {'.': 'array1'}}}));
+console.log(o.joqularMatch({array1: {disjoint: [4,5,6]}}));
+console.log(o.joqularMatch({array1: {disjoint: {'.': 'array2'}}}));
+console.log(o.joqularMatch({array1: {coincident: [1,2,3]}}));
+console.log(o.joqularMatch({array1: {coincident: {'.': 'array1'}}}));
+console.log(o.joqularMatch({duration1: {intersects: {startingTime: d1, endingTime:d2}}}));
+console.log(o.joqularMatch({duration1: {intersects: {'.': 'duration2'}}}));
+console.log(o.joqularMatch({duration1: {intersects: {'.': 'duration3'}}})); // null expected
+console.log(o.joqularMatch({duration1: {adjacentOrBefore: {'.': 'duration2'}}}));
+console.log(o.joqularMatch({duration2: {adjacentOrAfter: {'.': 'duration1'}}}));
+console.log(o.joqularMatch({duration2: {adjacent: {'.': 'duration4'}}}));
+console.log(o.joqularMatch({duration4: {coincident: {startingTime: du4.startingTime, endingTime:Infinity}}}));
+
+function TestObject(id,array) {
+	this.id = id;
+	this.array = array || [];
+}
+function AsyncObject(id,array) {
+	this.id = id;
+}
+function PromiseObject(id,array) {
+	this.id = id;
+}
+function Person(name) {
+	this.name = name;
+}
+Person.prototype = new Object();
+Person.prototype.getName = function() { return this.name; }
+
+Person = JOQULAR.createIndex(Person);
+TestObject = JOQULAR.createIndex(TestObject,true);
+AsyncObject = JOQULAR.createIndex(AsyncObject,function(instance) { console.log(instance); })
+PromiseObject = JOQULAR.createIndex(PromiseObject,true);
+
+var s1 = new Person('Simon');
+//Object.joqularIndex(s1);
+console.log(Person.joqularFind({name: 'Simon'}));
+console.log(Person.joqularFind({name: {eq: 'Simon', instanceof: Person}}));
+s1.name = "Joe";
+
+var t1 = new TestObject(10);
+var t2 = new TestObject(20,new Array(1,2,3));
+var t3 = new TestObject(30);
+console.log(TestObject.joqularFind({id: 20}));
+console.log(TestObject.joqularFind({id: {lt: 20}}));
+console.log(TestObject.joqularFind({id: {lte: 20}}));
+console.log(TestObject.joqularFind({id: {eq: 20}}));
+console.log(TestObject.joqularFind({id: {neq: 20}}));
+console.log(TestObject.joqularFind({id: {gte: 20}}));
+console.log(TestObject.joqularFind({id: {gt: 20}}));
+console.log(TestObject.joqularFind({array: {contains: 1}}));
+t1.id = -1;
+
+var a1 = new AsyncObject(10);
+var p1 = new PromiseObject(10).then(function(instance) { console.log(instance); });
+var r1 = AsyncObject.joqularFind({id: 10},function(results) { console.log(results); });
+var r2 = PromiseObject.joqularFind({id: 10},true);
+r2.then(function(results) { console.log(results); });
+
+function PerfTestObject(id) {
+	this.id = id;
+}
+PerfTestObject = JOQULAR.createIndex(PerfTestObject);
+
+var find = Math.floor((Math.random() * 100) + 1);
+console.time("generate");
+var objects = [];
+var numobj = 100000;
+console.time("index");
+for(let i=0;i<numobj;i++) {
+	let p = new PerfTestObject(Math.floor((Math.random() * 100) + 1));
+	objects.push(p);
+}
+console.timeEnd("generate");
+indexedDB.deleteDatabase("MyTestDatabase");
+var dbrequest = indexedDB.open("MyTestDatabase",1);
+dbrequest.onupgradeneeded = function(event) { 
+  	var db = event.target.result;
+ 	var objectStore = db.createObjectStore("objects", { autoIncrement : true });
+ 	objectStore.createIndex("id", "id", { unique: false });
+ 	console.time("IndexDB insert");
+ 	for (var i=0;i<objects.length;i++) {
+		var addrequest = objectStore.add(objects[i]);
+		addrequest.onsuccess = function(event) { 
+			;
+		}
+    }
+ 	objectStore.transaction.oncomplete = function(event) {
+		console.timeEnd("IndexDB insert");
+   	    console.time("IndexDB get");
+   	    var store = db.transaction("objects", "readwrite").objectStore("objects");
+	    var index = store.index("id");
+	    var singleKeyRange = IDBKeyRange.only(find);
+	    var cursorrequest = index.openCursor(singleKeyRange);
+	    var results = [];
+	    cursorrequest.onsuccess = function(event) {
+			var cursor = event.target.result;
+			if (cursor) {
+			    results.push(cursor.value);
+			    cursor.continue();
+			} else {
+				console.timeEnd("IndexDB get");
+				console.log(results);
+			}
+		}
+  	}
+}
+console.time("linearFind");
+var results = [];
+for(let i=0;i<objects.length;i++) {
+	if(objects[i].id===find) {
+		results.push(objects[i]);
+	}
+}
+console.timeEnd("linearFind");
+console.log(results);
+
+PerfTestObject.joqularFind(null,true).then(function(results) { 
+	var results;
+	console.timeEnd("index");
+	console.time("joqularFind");
+	results = PerfTestObject.joqularFind({id: find});
+	console.timeEnd("joqularFind");
+	console.log(results);
+	console.time("joqularFind after first cache");
+	results = PerfTestObject.joqularFind({id: find});
+	console.timeEnd("joqularFind after first cache");
+	console.log(results);
+	
+	//console.time("persist");PerfTestObject.persist();console.timeEnd("persist");
+
+	//console.time("load");PerfTestObject.load();console.timeEnd("load");
+});
+
+
+
+
+// {name: {'@': [new Date(),'Simon',new Duration().atLeast(),'Joe']}}
+
+function Relation(specification) {
+	var f = function(config) {
+		var me = this;
+		for(var key in config) {
+		    if(typeof(config[key])!=="function") {
+				if(cons.specification.objects[key]) {
+					if(cons.specification.objects[key].kind) {
+						if(config[key] instanceof cons.specification.objects[key].kind) {
+							me[key] = config[key];
+						} else {
+							throw new Error(cons.specification.name + "." + key + " must be an instance of " + cons.specification.objects[key].kind);
+						}
+					}
+				} else {
+					me[key] = config[key];
+				}
+			}
+		}
+		me.implications = [];
+		cons.implications.forEach(function(implication) {
+			var implications = implication.mapping["function"](me);
+			implications.forEach(function(implied) {
+				var relation = new implication.relation(implied);
+				if(implication.mapping.cascade.updates) {
+					Object.observe(me,function(changes) {
+						changes.forEach(function(change) {
+							if(typeof(implication.mapping.cascade.updates)==="function") {
+								implication.mapping.cascade.updates.call(relation,change);
+							} else {
+								implication.mapping["function"](me);
+							}
+						});
+					},["update"]);
+				}
+				me.implications.push(relation);
+			});
+		});
+		return me;
+	}
+	var cons = new Function("f","return function " + specification.name + "() { return f.call(this,arguments[0]); }")(f);
+	cons.specification = specification;
+	cons.implications = [];
+	cons.implies = function(relation,mapping) {
+		cons.implications.push({relation:relation,mapping:mapping});
+		return cons;
+	}
+	cons.prototype = new Object();
+	return cons;
+}
+var Marriage = Relation({name: "Marriage", objects: {husband:{cardinality: 1, kind: Person}, wife:{cardinality: 1, kind: Person}}});
+var Spouse = Relation({name: "Spouse", objects: {partner1:{cardinality: 1, kind: Person}, partner2:{cardinality: 1, kind: Person}}});
+var Children = Relation({name: "parent", objects: {parent: {cardinality: 2, kind: Person}, children: {cardinality: Infinity, kind: Person}}});
+//Marriage = JOQULAR.createIndex(Marriage);
+//Spouse = JOQULAR.createIndex(Spouse);
+Marriage.implies(Spouse,{cascade: {
+	deletes:true,
+	updates: function(change) {
+			if(this.partner1 === change.oldValue) {
+				this.partner1 = change.object[change.name];
+			} else if(this.partner2 === change.oldValue) {
+				this.partner2 = change.object[change.name];
+			}
+		}
+	}, 
+	"function": function(marriage) { 
+		return [{partner1: marriage.husband, partner2: marriage.wife},{partner1: marriage.wife, partner2: marriage.husband}] 
+	}});
+
+var Simon = new Person('Simon');
+var Juliana = new Person('Juliana');
+var m1 = new Marriage({husband: Simon, wife: Juliana});
+var m2 = new Marriage({husband: {}, wife: Juliana});
+
+
+//{merge: {into: "Person"}, on: <pattern>, matched: { update: {set: {path1: value} }, notMatched: {insert: keys: values: object: }}}
+//{update: {p1: Person, p2: Person},set: {path1: value, path2:value}, where: pattern}}
+//{delete: {from: {p1: Person, p2: Person}}, where: pattern}
+
+
+
+function Transaction() {
+	this.batch = [];
+}
+Transaction.prototype.exec = function(timeout,booleanOrCallback) {
+	var me = this, promise, impacted = [], indexes = [];
+	me.batch.forEach(function(statement) {
+		statement.impacts.forEach(function(constructor) {
+			if(impacted.indexOf(constructor)===-1) {
+				impacted.push(constructor);
+				// need to use typed JSON here??
+				indexes.push(JSON.stringify({ids: constructor.ids, index: constructor.index}));
+			}
+		});
+	});
+	me.timeout = setTimeout(function() { delete me.timeout; },timeout);
+	me.batch.every(function(statement) {
+		if(!me.timeout) return false;
+		promise = (promise ? promise.then(function() { if(me.timeout) statement.exec(true,false); }) : statement.exec(true,false));
+	});
+	promise.then(function() {
+		if(me.timeout) {
+			// take a snapshot first
+			
+			// now save
+			var promises = [];
+			impacted.forEach(function(constructor) {
+				promises.push(constructor.joqularSave(true));
+			});
+			Promise.all(promises,function() {
+				// delete snapshot
+				
+				deleteTimeout(me.timeout);
+				delete me.timeout;
+			}).catch(function(err) {
+				// rollback to the snapshot
+				
+				// restore index
+				impacted.forEach(function(constructor,i) {
+					var index = JSON.parse(indexes[i]);
+					constructor.ids = index.ids;
+					constructor.index = index.index;
+				});
+				throw new Error("Transaction aborted, error: " + err.message + " " + JSON.stringify(me.batch));
+			});
+		} else {
+			impacted.forEach(function(constructor,i) {
+				var index = JSON.parse(indexes[i]);
+				constructor.ids = index.ids;
+				constructor.index = index.index;
+			});
+		}
+	});
+	return promise;
+}
+Transaction.prototype.abort = function() {
+	delete this.timeout;
+}
+Transaction.prototype.toJSON = function() {
+	return {transaction: this.batch};
+}
+Transaction.prototype.select = function(projection) {
+	var statement = new Select(projection);
+	this.batch.push(statement);
+	return statement;
+}
+Transaction.prototype.insert = function() {
+	var statement = new Insert();
+	this.batch.push(statement);
+	return statement;
+}
+Transaction.prototype.update = function(aliases) {
+	var statement = new Update(aliases);
+	this.batch.push(statement);
+	return statement;
+}
+Transaction.prototype.merge = function() {
+	var statement = new Merge();
+	this.batch.push(statement);
+	return statement;
+}
+Transaction.prototype.delete = function() {
+	var statement = new Delete();
+	this.batch.push(statement);
+	return statement;
+}
+</script>
+
+</body>
+</html>
