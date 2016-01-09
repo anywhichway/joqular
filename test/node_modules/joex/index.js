@@ -133,29 +133,34 @@
 			});
 			return max;
 		}
-		ExtendedArray.prototype.sum = function() {
+		ExtendedArray.prototype.sum = function(filter) {
 			var sum;
+			filter = (filter ? filter : function(item) { return (item!=null ? item.valueOf() : undefined); });
 			this.forEach(function(item) {
-				if(typeof(item)==="number") {
+				var value = filter(item)
+				if(typeof(value)==="number") {
 					if(sum===undefined) {
-						sum = item;
+						sum = value;
 					} else {
-						sum += item;
+						sum += value;
 					}
 				}
 			});
 			return (sum===undefined ? NaN : sum);
 		}
-		ExtendedArray.prototype.avg = function() {
-			var sum, count = 0;
+		ExtendedArray.prototype.avg = function(all) {
+			var sum, count = 0, f = (all ? (typeof(all)==="function" ? all : all) : function(item) { return (item!=null ? item.valueOf() : undefined); } )
 			this.forEach(function(item) {
-				if(typeof(item)==="number") {
+				var value = (typeof(f)==="function" ? f(item) : (item!=null ? item.valueOf() : undefined));
+				if(typeof(value)==="number") {
 					count ++;
 					if(sum===undefined) {
-						sum = item;
+						sum = value;
 					} else {
-						sum += item;
+						sum += value;
 					}
+				} else if(all===true) {
+					count++;
 				}
 			});
 			return (sum===undefined ? NaN : sum / count);
@@ -377,6 +382,24 @@
 			s: "seconds",
 			ms: "milliseconds"
 	}
+	function toPrecision(milliseconds,precision) {
+		var dt = new Date(milliseconds), yr = dt.getFullYear();
+		var M1, D1, h1, m1, s1, ms1;
+		M1 = (["M","D","h","m","s","ms"].indexOf(precision)>=0 ? dt.getMonth() : 0);
+		D1 = (["D","h","m","s","ms"].indexOf(precision)>=0 ? dt.getDate() : 1);
+		h1 = (["h","m","s","ms"].indexOf(precision)>=0 ? dt.getHours() : 0);
+		m1 = (["m","s","ms"].indexOf(precision)>=0 ? dt.getMinutes() : 0);
+		s1 = (["s","ms"].indexOf(precision)>=0 ? dt.getSeconds() : 0);
+		ms1 = (["ms"].indexOf(precision)>=0 ? dt.getMilliseconds() : 0);
+		dt = new Date(yr,0);
+		dt.setMonth(M1);
+		dt.setDate(D1);
+		dt.setHours(h1);
+		dt.setMinutes(m1);
+		dt.setSeconds(s1);
+		dt.setMilliseconds(ms1);
+		return dt.getTime();
+	}
 	Date.extend = function() {
 		var ExtendedDate = Date;
 		Object.defineProperty(ExtendedDate.prototype,"time",{enumerable:true,configurable:true,set:function(value) {  this.setTime(value);},get:function() { return this.getTime(); }});
@@ -390,33 +413,33 @@
 		Object.defineProperty(ExtendedDate.prototype,"milliseconds",{enumerable:true,configurable:true,set:function(value) {  this.setMilliseconds(value);},get:function() { return this.getMilliseconds(); }});
 		ExtendedDate.prototype.lt = function(value,precision) {
 			precision = (precision ? [precisionMap[precision]] : "time");
-			return this[precision] < (new ExtendedDate(value))[precision];
+			return toPrecision(this.getTime(),precision) < toPrecision(value,precision);
 		};
 		ExtendedDate.prototype.lte = function(value,precision) {
 			precision = (precision ? [precisionMap[precision]] : "time");
-			return this[precision] <= (new ExtendedDate(value))[precision];
+			return toPrecision(this.getTime(),precision) <= toPrecision(value,precision);
 		};
 		ExtendedDate.prototype.eq = function(value,precision) {
 			precision = (precision ? [precisionMap[precision]] : "time");
-			return this[precision] === (new ExtendedDate(value))[precision];
+			return toPrecision(this.getTime(),precision) === toPrecision(value,precision);
 		};
 		ExtendedDate.prototype.eeq = function(value) {
 			return this===value;
 		};
 		ExtendedDate.prototype.neq = function(value,precision) {
 			precision = (precision ? [precisionMap[precision]] : "time");
-			return this[precision] !== (new ExtendedDate(value))[precision];
+			return toPrecision(this.getTime(),precision) !== toPrecision(value,precision);
 		};
 		ExtendedDate.prototype.neeq = function(value) {
 			return this!==value;
 		};
 		ExtendedDate.prototype.gte = function(value,precision) {
 			precision = (precision ? [precisionMap[precision]] : "time");
-			return this[precision] >= (new ExtendedDate(value))[precision];
+			return toPrecision(this.getTime(),precision) >= toPrecision(value,precision);
 		};
 		ExtendedDate.prototype.gt = function(value,precision) {
 			precision = (precision ? [precisionMap[precision]] : "time");
-			return this[precision] > (new ExtendedDate(value))[precision];
+			return toPrecision(this.getTime(),precision) > toPrecision(value,precision);
 		};
 		// http://www.pilcrow.nl/2012/09/javascript-date-isleapyear-and-getlastdayofmonth
 		//ExtendedDate functions. (Caveat: months start at 0!)
