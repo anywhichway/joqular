@@ -1,17 +1,23 @@
 {
-  "name": "myapp",
-  "version": "0.0.0",
-  "private": true,
-  "scripts": {
-    "start": "node ./bin/www"
+  "name": "joqular",
+  "version": "2.0.1",
+  "description": "Fully indexed browser and server Javascript database with projections, joins, statistical sampling and simple extensibility.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anywhichway/joqular.git"
   },
-  "dependencies": {
-    "body-parser": "~1.13.2",
-    "cookie-parser": "~1.3.5",
-    "debug": "~2.2.0",
-    "express": "~4.13.1",
-    "jade": "~1.11.0",
-    "morgan": "~1.6.1",
-    "serve-favicon": "~2.3.0"
-  }
+  "keywords": [
+    "NoSQL",
+    "MongoDB",
+    "PouchDB",
+    "IndexedDB",
+    "Cloudbase",
+    "Forerunner"
+  ],
+  "author": "Simon Y. Blackwell <syblackwell@anywhichway.com> (http://www.github.com/anywhichway)",
+  "license": "GPL 3",
+  "bugs": {
+    "url": "https://github.com/anywhichway/joqular/issues"
+  },
+  "homepage": "https://github.com/anywhichway/joqular#readme"
 }

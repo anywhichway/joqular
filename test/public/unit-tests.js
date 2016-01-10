@@ -17,6 +17,10 @@
 		var Validator = require('jovial');
 		var uuid = require('node-uuid');
 		
+		JOQULAR.constructors.Time = Time;
+		JOQULAR.constructors.Duration = Duration;
+		JOQULAR.constructors.TimeSpan = TimeSpan;
+		
 		var performance;
 		if(typeof(window)==="object") {
 			performance= window.performance;

@@ -1,7 +1,7 @@
 /*
  * GNU GENERAL PUBLIC LICENSE
  * Version 3, 29 June 2007
- * Copyright 2015 (and left) AnyWhichWay, LLC and Simon Y. Blackwell
+ * Copyright 2015, 2016 AnyWhichWay, LLC and Simon Y. Blackwell
  * 
  * The software is provided as is without any guarantee of quality or applicability for any specific use.
  * 
@@ -15,15 +15,6 @@
 	var uuid = require('node-uuid');
 	//require("proxy-observe");
 	var NOM =  require('nested-object-model');
-	var Array = require('joex').Array.extend();
-	var Set = require('joex').Set.extend();
-	var Boolean = require('joex').Boolean.extend();
-	var Number = require('joex').Number.extend();
-	var String = require('joex').String.extend();
-	var Date = require('joex').Date.extend();
-	var Time =  require('about-time').Time;
-	var Duration =  require('about-time').Duration;
-	var TimeSpan = require('about-time').TimeSpan;
 	var sessionStorage = require('sessionstorage');
 	
 	var JOQULAR = {};
@@ -1442,7 +1433,7 @@
 		return value;
 	}
 		
-	JOQULAR.constructors = {Array:Array,Set:Set,Map:Map,Date:Date,Time:Time,Duration:Duration,TimeSpan:TimeSpan};
+	JOQULAR.constructors = {Array:Array,Set:Set,Map:Map,Date:Date};
 	JOQULAR.predicates = {
 		$lt: generic(function(arg) { return this.valueOf() < arg; })
 			.method(function(arg) { return supports(this,"lt"); },function(arg) { return this.lt(arg); })

@@ -7,7 +7,6 @@ var uuid = require('node-uuid');
 var JOQULAR = require('./javascripts/joqular.js');
 NOM.Event.trace(0);
 
-var storage = new JOQULAR.Storage();
 var db = JOQULAR.db("Test", {storage:new JOQULAR.Storage(undefined,new JOQULAR.Server(window.location.origin + '/joqular'))});
 var test = require("./unit-tests.js");
 test(runtest,logsuccess,db);
