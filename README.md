@@ -22,7 +22,7 @@ This is version 2.0.1 of JOQULAR. This is an ALPHA release. Changes from version
 7) The calling interface is now almost exclusively Promise based.
 8) Schema based validation on a continuous basis per property change or a per Object invocation has been added using https://github.com/anywhichway/jovial.
 9) Both client and server storage have been added. Transfer of data to the server id accomplished using Faye
-10) A Node Express started framework is provided.
+10) A Node Express starter framework is provided.
 11) All documentation is temporarily moved into this README.
 
 Remaining activities to get to beta include:
