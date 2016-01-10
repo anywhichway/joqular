@@ -3,35 +3,57 @@
 JavaScript Object Query Language Representation - Funny, it's mostly JSON.
 
 - Serializable pattern and SQL like object matching for JavaScript, including joins!
+
 - Use Insert, Update, Delete to modify objects and indexes, or configure indexes to update automatically with zero configuration indexing.
+
 - More built-in predicates/operators than most other other data query mechanisms. Includes built in random and statistical sampling capability.
+
 - Extensible with just one line of code per predicate/query operator. Puts the intelligence in your data, not the database engine.
+
 - Just-in-time, fully indexed in-memory database
+
 - Indexes represent the live state of JavaScript objects. Query results are also live objects or POJO projections, your choice. POJO key value formatting using a built-in or developer specified format function.
+
 - Client and server side persistence.
-- A complete Node Express starter framework
+
+- A Node Express starter framework
 
 This is version 2.0.1 of JOQULAR. This is an ALPHA release. Changes from version 1.0 include: 
 
 1) A far cleaner code-base.
+
 2) A more modular code-base.
+
 3) Movement of temporal code into its own library https://github.com/anywhichway/about-time.
+
 4) All predicates and key words now start with $.
+
 5) Path references now use the key word $self, e.g. {"/": "name"} becomes {$self:"/name"}.
+
 6) Native object polyfills are now optional, although not using them will limit database predicate tests against these objects.
+
 7) The calling interface is now almost exclusively Promise based.
+
 8) Schema based validation on a continuous basis per property change or a per Object invocation has been added using https://github.com/anywhichway/jovial.
+
 9) Both client and server storage have been added. Transfer of data to the server id accomplished using Faye
+
 10) A Node Express starter framework is provided.
+
 11) All documentation is temporarily moved into this README.
 
 Remaining activities to get to beta include:
 
 1) More functional testing
+
 2) Cross browser testing. The only testing so far is in Chrome.
+
 3) More performance testing to verify the code, like v1, is still 2x to 10x faster than linear search, and faster than Forerunner, IndexedDB and PouchDB for insert and search.
+
 4) Proper packaging and bundling. Currently the most viable way to start development with JOQULAR is to base an application on the sample provided in the test directory. There is no one file or module that can be loaded.
+
 5) Further work on client/server data synchronization.
+
 6) More documentation
 
 Issues log: https://github.com/anywhichway/joqular/issues
@@ -159,11 +181,11 @@ select().sample(.95,.03).from({p1: Person});
 
 # pattern matching
 
-Classes are made available to JOQULAR for pattern matching by invoking `\<constructor\> = JOQULAR.Entity(\<constructor\>,"\<name\>")`. This subclasses the provided constructor and returns the constructor for the new class, which should be used in place of the original constructor. The `\<name\>` argument is optional expect unless the name property is not available from the constructor, i.e. when they were created anonymously or in certain Javascript engines, e.g. Internet Explorer.
+Classes are made available to JOQULAR for pattern matching by invoking `<constructor> = JOQULAR.Entity(<constructor>,"<name>")`. This subclasses the provided constructor and returns the constructor for the new class, which should be used in place of the original constructor. The `<name>` argument is optional expect unless the name property is not available from the constructor, i.e. when they were created anonymously or in certain Javascript engines, e.g. Internet Explorer.
 
-Once a class is made available to JOQULAR all new instances are automatically indexed as first class objects and become available for pattern matching using `\<constructor>\>.find(\<pattern\>)` which will return a Promise resolving to an Array of matching instances. As part of the indexing process an enumerable `_id` field will be added to all Entities. You can think of them almost like records in MongoDB collections.
+Once a class is made available to JOQULAR all new instances are automatically indexed as first class objects and become available for pattern matching using `<constructor>>.find(<pattern>)` which will return a Promise resolving to an Array of matching instances. As part of the indexing process an enumerable `_id` field will be added to all Entities. You can think of them almost like records in MongoDB collections.
 
-`\<pattern\>` is a Javascript object which may use keys and values to literally match instances or may have predicates in place of property keys. The value `null` is indexed and literally matchable, the psuedo-value `unknown` is not indexed. By convention, these predicates start with $. The list of predicates generally includes `$lt, $lte, $eq, $new, $gte, $gt`. Strings also make available `$echoes, $match`. A complete list of built-in predicates is available in the API section. However, predicates can be added with just one line of code to leverage any custom objects you may wish to store in JOQULAR format. See the section on extending JOQULAR.
+`<pattern>` is a Javascript object which may use keys and values to literally match instances or may have predicates in place of property keys. The value `null` is indexed and literally matchable, the psuedo-value `unknown` is not indexed. By convention, these predicates start with $. The list of predicates generally includes `$lt, $lte, $eq, $new, $gte, $gt`. Strings also make available `$echoes, $match`. A complete list of built-in predicates is available in the API section. However, predicates can be added with just one line of code to leverage any custom objects you may wish to store in JOQULAR format. See the section on extending JOQULAR.
 
 Here is a simple example:
 
@@ -192,7 +214,7 @@ Unless a projection is needed to limit the properties returned, a query just sta
 
 The from portion of a query is used to specify the classes from which to select instances an the aliases to use fro the classes. Unlike SQL and alias must be provided, e.g. `JOQULAR.select().from({p1: Person})` selects Person instances and makes the alias `p1` available to patterns in the where clause.
 
-The where clause uses the same pattern matching syntax as `\<class\>.find(pattern)`, except that the top level of each pattern has as keys the aliases created in the from clause, e.g. `JOQULAR.select().from({p1: Person}).where({p1: {name: null, age: 19}})`.
+The where clause uses the same pattern matching syntax as `<class>.find(pattern)`, except that the top level of each pattern has as keys the aliases created in the from clause, e.g. `JOQULAR.select().from({p1: Person}).where({p1: {name: null, age: 19}})`.
 
 A from clause can be prefixed with `.first(count), .last(count), .sample(sizeOrConfidenceLevel[,marginOfError])`, e.g. `JOQULAR.select().first(1).from({p1: Person})`. If marginOfError is not provided to `.sample`, it is assumed `sizeOrConfidenceLevel` is a count. Optionally `.randomize()` can be inserted before or after the count constraints to impact the actual values selected. If inserted alone, it will simply impact the order of the results, e.g. `JOQULAR.select().first(1).randomize().from({p1: Person})`. Additionally, `.first` and `.last` can be used to select from a sample, e.g. `JOQULAR.select().first(1).sample(2).randomize().from({p1: Person})`
 
@@ -227,7 +249,7 @@ var db = JOQULAR.db("Test", {storage:new JOQULAR.Storage(undefined,new JOQULAR.S
 `JOQULAR.Storage(primary,replicant)` creates a storage driver. Typically `primary` will be local storage in the browser and can be left as undefined. If replaced it should support  `.getItem(key), .setItem(key,data), .removeItem(key)`.
 `JOQULAR.Server(location)` creates a connection to a Faye server providing back-end persistence services. This can be replaced with any service around which a wrapper supporting `.getItem(key), .setItem(key,data), .removeItem(key)`.
 
-Collections are created using the call `var coll = db.collection(\<JOQULAR Entity Name\>[,options])`. This binds the collection to the index for the class so that all future queries, instance creations, etc. are automatically bound to the collection. There is no need to interact directly with collections for queries, inserts, updates, and deletions. To save the collection to disk, just call `\<collection\>.save()`.
+Collections are created using the call `var coll = db.collection(<JOQULAR Entity Name>[,options])`. This binds the collection to the index for the class so that all future queries, instance creations, etc. are automatically bound to the collection. There is no need to interact directly with collections for queries, inserts, updates, and deletions. To save the collection to disk, just call `<collection>.save()`.
 
 Once again, continuing with the Person example:
 
@@ -236,7 +258,7 @@ var pcollecton = new db.collection("Person");
 pcollection.save(); // will persist p1, p2, p3 from the earlier portion of the example
 ```
 
-If you desire to have all new objects automatically persisted, just call `\<collection\>.stream(bool=true)`.
+If you desire to have all new objects automatically persisted, just call `<collection>.stream(bool=true)`.
 
 ```
 pcollection.stream();
