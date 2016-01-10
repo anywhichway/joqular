@@ -1,11 +1,17 @@
 # joqular
 
-NOTE: Version 2.0 of JOQULAR was about to be released November 15th, 2015 when it was announced Object.observe is being dropped from the ECMA standards track. This will require re-working certain portions of JOQULAR. Hence, there will be a delay. However, it is recommended you not start using this version for anything other than exploratory investigation. The new version of JOQULAR has the following:
+NOTE: An ALPHA of Version 2 of JOQULAR was released on January 10th, 2016. It is available at this branch https://github.com/anywhichway/joqular/tree/v2.  It is recommended you not start using Version 1 for anything other than exploratory investigation and you may simply be better off with the ALPHA. The new version of JOQULAR has the following:
 
-1) A far cleaner code-base
-2) A more modular code-base
-3) Supports schema based validation on a continuous basis per property change or a per Object invocation
-4) Supports both client and server storage with synchronization
+1) A far cleaner code-base.
+2) A more modular code-base.
+3) Movement of temporal code into its own library https://github.com/anywhichway/about-time.
+4) All predicates and key words now start with $.
+5) Path references now use the key word $self, e.g. {"/": "name"} becomes {$self:"/name"}.
+6) Native object polyfills are now optional, although not using them will limit database predicate tests against these objects.
+7) The calling interface is now almost exclusively Promise based.
+8) Schema based validation on a continuous basis per property change or a per Object invocation has been added using https://github.com/anywhichway/jovial.
+9) Both client and server storage have been added. Transfer of data to the server id accomplished using Faye
+10) A Node Express starter framework is provided.
 
 
 JavaScript Object Query Language Representation - Funny, it's mostly JSON.
