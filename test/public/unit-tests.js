@@ -4,17 +4,18 @@
 	
 	function test(runtest,logsuccess,db) {
 		var JSON = require('./javascripts/json5-ex.js');
-		var Array = require('joex').Array.extend();
-		var Set = require('joex').Set.extend();
-		var Boolean = require('joex').Boolean.extend();
-		var Number = require('joex').Number.extend();
-		var String = require('joex').String.extend();
-		var Date = require('joex').Date.extend();
+		require('joex');
+		Array = Array.extend();
+		Set = Set.extend();
+		Boolean = Boolean.extend();
+		Number = Number.extend();
+		String = String.extend();
+		Date = Date.extend();
 		var Time = require('about-time').Time;
 		var Duration =  require('about-time').Duration;
 		var TimeSpan = require('about-time').TimeSpan;
 		var JOQULAR = require('./javascripts/joqular.js');
-		var Validator = require('jovial');
+		
 		var uuid = require('node-uuid');
 		
 		JOQULAR.constructors.Time = Time;

@@ -13,14 +13,14 @@
 	var _global = this;
 	var generic = require('js-generics');
 	var uuid = require('node-uuid');
-	//require("proxy-observe");
+	require("proxy-observe");
 	var NOM =  require('nested-object-model');
 	var sessionStorage = require('sessionstorage');
 	
 	var JOQULAR = {};
 
 	var Faye = require('../javascripts/faye.js');
-	var JSON5 = require('../javascripts/json5-ex');
+	var JSON5 = require('../javascripts/json5-ex.js');
 	
 	require('../javascripts/es6-promise.min.js');
 	require('../javascripts/es6-collections.min.js');

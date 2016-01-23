@@ -1,8 +1,21 @@
 <html>
 <head>
 
-<script src="/node_modules/node-require" data-main="./index"></script>
+<script src="node-require" language="javascript"></script>
+<script src="jovial" language="javascript"></script>
 <body>
+<script>
+"use strict";
+var runtest;
+var logsuccess = false;
+var NOM =  require('nested-object-model');
+var uuid = require('node-uuid');
+var JOQULAR = require('./javascripts/joqular.js');
+NOM.Event.trace(0);
 
+var db = JOQULAR.db("Test", {storage:new JOQULAR.Storage(undefined,new JOQULAR.Server(window.location.origin + '/joqular'))});
+var test = require("./unit-tests.js");
+test(runtest,logsuccess,db);
+</script>
 </body>
 </html>
