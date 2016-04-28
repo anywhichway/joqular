@@ -1,6 +1,11 @@
 # joqular
 
-NOTE: An ALPHA of Version 2 of JOQULAR was released on January 10th, 2016. It is available at this branch https://github.com/anywhichway/joqular/tree/v2.  It is recommended you not start using Version 1 for anything other than exploratory investigation and you may simply be better off with the ALPHA. The new version of JOQULAR has the following:
+NOTE: 
+
+2016-04-28: With the release of Node v6.0 on April 26th, 2016 we are able to re-start development of JOQULAR 2.0 and move from Alpha to Beta in the next month or so.
+
+
+An ALPHA of Version 2 of JOQULAR was released on January 10th, 2016. It is available at this branch https://github.com/anywhichway/joqular/tree/v2.  It is recommended you not start using Version 1 for anything other than exploratory investigation and you may simply be better off with the ALPHA. The new version of JOQULAR has the following:
 
 1) A far cleaner code-base.
 
