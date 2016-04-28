@@ -3,6 +3,7 @@
 
 <script src="node-require" language="javascript"></script>
 <script src="jovial" language="javascript"></script>
+
 <body>
 <script>
 "use strict";
@@ -13,9 +14,20 @@ var uuid = require('node-uuid');
 var JOQULAR = require('./javascripts/joqular.js');
 NOM.Event.trace(0);
 
-var db = JOQULAR.db("Test", {storage:new JOQULAR.Storage(undefined,new JOQULAR.Server(window.location.origin + '/joqular'))});
+JOQULAR.createIndexedDBStore(1).then(function(idb) {
+  var db = JOQULAR.db("Test",{storage:idb}); // make JOQULAR.db into a promise, then we can put down the IndedxDB stuff
+  var test = require("./unit-tests.js");
+  test(runtest,logsuccess,db);
+}).catch(function(err) {
+	console.log(err);
+});
+
+/*
+var db = JOQULAR.db("Test"); //, {storage:new JOQULAR.Storage(undefined,new JOQULAR.Server(window.location.origin + '/joqular'))}
 var test = require("./unit-tests.js");
 test(runtest,logsuccess,db);
+*/
 </script>
 </body>
 </html>
+

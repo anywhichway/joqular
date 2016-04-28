@@ -7,6 +7,10 @@
  * 
  * Attribution for the work of others is in the source code, although none came with a license stipulation.
  */
+
+// written.then - 1,000+ second
+// indexed.then - 10,000+ second
+// indexWritten.then - 30 second
 (function() {
 	//"use strict"; DO NOT ENABLE, it will break matching	
 
@@ -17,15 +21,23 @@
 	var NOM =  require('nested-object-model');
 	var sessionStorage = require('sessionstorage');
 	
+	var levelup;
+	if(typeof(window)!=="undefined") {
+		levelup = require("level-js");
+	} else {
+		levelup = require("levelup");
+	}
+	
 	var JOQULAR = {};
 
 	var Faye = require('../javascripts/faye.js');
 	var JSON5 = require('../javascripts/json5-ex.js');
 	
-	require('../javascripts/es6-promise.min.js');
+	require("bluebird");
+	//require('../javascripts/es6-promise.min.js');
 	require('../javascripts/es6-collections.min.js');
 	
-	// test object to see if it supports and interface
+	// test object to see if it supports an interface
 	// items can be an array of strings or Objects
 	// if string, then object must have a method by the same name
 	// if Object, then object must have all the methods of Object
@@ -90,7 +102,7 @@
 				return [];
 			}
 			if (arrays === 1) {
-				return array.slice();
+				return intersection(array,array);
 			}
 			 
 			var arg   = 0, // current arg index
@@ -138,34 +150,28 @@
 			 
 				return result;
 	}
-	function crossproduct(args,test) {
-	  var end  = args.length - 1, abort;
-	  var result = []
-	  function addTo(curr, start) {
-	    var first = args[start]
-	      , last  = (start === end)
-	    for (var i = 0; i < first.length; ++i) {
-	      var copy = curr.slice();
-	      copy.push(first[i])
-	      if (last) {
-	    	  if(!test || (abort = test(copy,result.length))) {
-	        	result.push(copy);
-	    	  }
-	      } else if(!test || (abort = test(copy,result.length))) {
-	    	  addTo(copy, start + 1)
-	      }
-		  if(abort==null) {
-			  return;
-		  }
-	    }
-	  }
-	  if (args.length) {
-	    addTo([], 0)
-	  } else {
-	    result.push([])
-	  }
-	  return result
-	}
+	function crossproduct(arrays,test) {
+		  var result = [],
+		      indices = Array(arrays.length);
+		  (function backtracking(index) {
+		    if(index === arrays.length) {
+		    	var row = arrays.map(function(array,index) {
+		            return array[indices[index]];
+		        });
+		    	if(!test) {
+		    		return result.push(row);
+		    	} else if(test(row)) {
+		    		result.push(row);
+		    	}
+		    	return result.length;
+		    }
+		    for(var i=0; i<arrays[index].length; ++i) {
+		      indices[index] = i;
+		      backtracking(index+1);
+		    }
+		  })(0);
+		  return result;
+		}
 	function getRandomInt(min, max) {
 	    return Math.floor(Math.random() * (max - min + 1)) + min;
 	}
@@ -570,8 +576,8 @@
 		var me = this;
 		me.entity = JOQULAR.constructors[name];
 		me.name = name;
-		me.entity.getItem = function(uuid) { 
-			return me.storage.getItem(uuid+".json");
+		me.entity.get = function(uuid) { 
+			return me.storage.get(uuid+".json");
 		};
 		if(config) {
 			var keys = Object.keys(config);
@@ -594,7 +600,7 @@
 				if(typeof(object.validate)!=="function" || (valid=object.validate())===true) {
 					index.instanceMap[uuid] = false; // just save the uuids on index for instance to save space and time, instances loaded on-demand by queries
 					updateMetadata(object);
-					promises.push(me.storage.setItem(uuid+".json",object));
+					promises.push(me.storage.put(uuid+".json",object));
 				} else {
 					errors.push(valid);
 				}
@@ -609,20 +615,22 @@
 				if(me.indexToSave) { // for efficiency, only save most recent index update
 					//savecount++;
 					//console.log(savecount);
-					me.storage.setItem(me.name+".json",me.indexToSave);
+					me.storage.put(me.name+".json",me.indexToSave);
 					delete me.indexToSave;
 				}
 				resolve((errors.length>0 ? errors : null));
+			}).catch(function(err) {
+				reject(err);
 			});
 		});
 	}
 	Collection.prototype.load = function() {
 		var me = this;
-		var promise = me.storage.getItem(me.name+".json");
+		var promise = me.storage.get(me.name+".json");
 		if(promise instanceof Promise) {
-			promise.then(function(data) {
+			promise.then(function(data) { 
 				if(data) {
-					data = JSON5.parse(data);
+					data = (typeof(data)==="string" ? JSON.parse(data) : data);
 					me.entity.index.instanceMap = data.instanceMap;
 					me.entity.index.keyMaps = data.keyMaps; // replace by part, not whole object since object is "shared" with prototype, doing whole object will disconnect from prototype
 				}
@@ -631,7 +639,7 @@
 		} 
 		var data = promise;
 		if(data) {
-			data = JSON5.parse(data);
+			data = (typeof(data)==="string" ? JSON.parse(data) : data);
 			me.entity.index.instanceMap = data.instanceMap;
 			me.entity.index.keyMaps = data.keyMaps; // replace by part, not whole object since object is "shared" with prototype, doing whole object will disconnect from prototype
 		}
@@ -641,7 +649,7 @@
 		var me = this;
 		var promises = [];
 		Object.keys(me.entity.index.instanceMap).forEach(function(uuid) {
-			var result = me.storage.removeItem(uuid+".json");
+			var result = me.storage.del(uuid+".json");
 			if(result instanceof Promise) {
 				promises.push(result);
 			}
@@ -676,7 +684,7 @@
 		uuidsOrPatterns.forEach(function(uuidOrPattern) {
 			if(typeof(uuidOrPattern)==="string") {
 				delete me.entity.index.instanceMap[uuidOrPattern];
-				var result = me.storage.removeItem(uuidOrPattern+".json");
+				var result = me.storage.del(uuidOrPattern+".json");
 				if(result instanceof Promise) {
 					promises.push(result);
 				}
@@ -684,7 +692,7 @@
 				var results = me.find(uuidOrPattern);
 				results.forEach(function(object) {
 					delete me.entity.index.instanceMap[object._id];
-					var result = me.storage.removeItem(object._id+".json");
+					var result = me.storage.del(object._id+".json");
 					if(result instanceof Promise) {
 						promises.push(result);
 					}
@@ -703,7 +711,7 @@
 				Object.keys(objects).forEach(function(uuid) {
 					var object = objects[uuid];
 					updateMetadata(object);
-					me.storage.setItem(uuid+".json",JSON5.stringify(object));
+					me.storage.put(uuid+".json",JSON5.stringify(object));
 				});
 				me.save();
 			}
@@ -736,8 +744,9 @@
 		if(!me.storage) { me.storage = new Storage(); };
 		if(!me.storage.primary) { 
 			if(typeof(window)==="undefined") {
-				var LocalStorage = require('node-localstorage').LocalStorage;
-				me.storage.primary = new LocalStorage('./localStorage.db',50 * 1024 * 1024);
+				//var LocalStorage = require('node-localstorage').LocalStorage;
+				//me.storage.primary = new LocalStorage('./localStorage.db',50 * 1024 * 1024);
+				me.storage.primary = levelup('./localStorage.db');
 			} else {
 				me.storage.primary = window.localStorage;
 			}
@@ -745,24 +754,28 @@
 		this.collections = {};
 	}
 	Database.prototype.collection = function(name,config) {
-		var conf = {storage: this.storage};
+		var conf = {storage: this.storage, streaming: false, preload: false};
 		if(config) {
 			var keys = Object.keys(config);
 			keys.forEach(function(key) {
 				conf[key] = config[key];
 			});
 		}
-		var collection = (this.collections[name] ? this.collections[name] : new Collection(name,conf));
-		collection.load();
-		collection.stream();
-		return collection;
+		this.collections[name] = (this.collections[name] ? this.collections[name] : new Collection(name,conf));
+		if(config.preload) {
+			this.collections[name].load();
+		}
+		if(config.streaming) {
+			this.collections[name].stream();
+		}
+		return this.collections[name];
 	}
-	//setItem, getItem, removeItem
+	//put, get, del
 	function Storage(primary,replicant) {
 		this.primary = primary;
 		this.replicant = replicant;
 	}
-	Storage.prototype.setItem = function(key,value) {
+	Storage.prototype.put = function(key,value) {
 		var me = this;
 		return new Promise(function(resolve,reject) {
 			try {
@@ -772,16 +785,16 @@
 				} else {
 					data = JSON5.stringify(value); // hand in stringifier to deal with nested objects
 				}
-				var result = me.primary.setItem(key,data);
+				var result = me.primary.put(key,data);
 				if(me.replicant && !(value instanceof Index)) {
 					if(result instanceof Promise) {
 						result.then(function() {
 							 {
-								me.replicant.setItem(key,data);
+								me.replicant.put(key,data);
 							}
 						});
 					} else {
-						me.replicant.setItem(key,data);
+						me.replicant.put(key,data);
 					}
 				}
 				if(result instanceof Promise) {
@@ -796,11 +809,11 @@
 			}
 		});
 	}
-	Storage.prototype.getItem = function(key) {
+	Storage.prototype.get = function(key) {
 		var me = this;
 		return new Promise(function(resolve,reject) {
 			try {
-				var result = me.primary.getItem(key);
+				var result = me.primary.get(key);
 				if(result instanceof Promise) {
 					result.then(function(data) {
 						if(data) {
@@ -810,7 +823,7 @@
 				} else if(result) {
 					resolve(JSON5.parse(result)); // hand in reviver to deal with nested objects
 				} else if(me.replicant) {
-					result = me.replicant.getItem(key);
+					result = me.replicant.get(key);
 					if(result instanceof Promise) {
 						result.then(function(data) {
 							if(data) {
@@ -830,11 +843,11 @@
 			}
 		});
 	}
-	Storage.prototype.removeItem = function(key) {
+	Storage.prototype.del = function(key) {
 		var primary = this.primary;
 		return new Promise(function(resolve,reject) {
 			try {
-				primary.removeItem(key);
+				primary.del(key);
 				resolve();
 			} catch(e) {
 				reject(e);
@@ -853,6 +866,96 @@
 		});
 	}
 	JOQULAR.Storage = Storage;
+	var IndexedDBStore = {
+			create: function(version) {
+				return new Promise(function(resolve,reject) {
+					var request = indexedDB.open("JOQULAR",(version ? version : 1));
+					request.onsuccess = function(event) {
+						  var db = event.target.result;
+						  db.put = function(key,value) {
+							  return new Promise(function(resolve,reject) {
+								  var store = db.transaction("json","readwrite").objectStore("json");
+								  var request = store.add({key:key,value:value});
+								  request.onsuccess = function(event) {
+									  resolve();
+								  }
+								  request.onerror = function(event) {
+									  console.log(event);
+									  reject(event);
+								  }
+							  });
+						  }
+						  db.get = function(key) {
+							  return new Promise(function(resolve,reject) {
+								  var store = db.transaction("json").objectStore("json");
+								  var request = store.get(key);
+								  request.onsuccess = function(event) {
+									  resolve(request.result);
+								  }
+								  request.onerror = function(event) {
+									  console.log(event);
+									  reject(event);
+								  }
+ 							  });
+						  }
+						 // var store = db.transaction("json","readwrite").objectStore("json");
+						 // var request = store.add({key:"testid",value:"test"});
+						 // request.onsuccess = function(event) {
+						//	  resolve(db);
+						 // }
+						 // request.onerror = function(event) {
+						//	  reject(event);
+						 // }
+						  resolve(db);
+					}
+					request.onupgradeneeded = function(event) {
+						  var db = event.target.result;
+						  var objectstore = db.createObjectStore("json",{keyPath: "key"});
+						  objectstore.transaction.oncomplete = function(event) {
+							 // var store = db.transaction("json","readwrite").objectStore("json");
+							 // var request = store.add({key:"testid",value:"test"});
+							 // request.onsuccess = function(event) {
+							//	  resolve(db);
+							 // }
+							//  request.onerror = function(event) {
+							//	  reject(event);
+							//  }
+							  resolve(db);
+						  }
+						  db.put = function(key,value) {
+							  return new Promise(function(resolve,reject) {
+								  var store = db.transaction("json","readwrite").objectStore("json");
+								  var request = store.add({key:key,value:value});
+								  request.onsuccess = function(event) {
+									  resolve();
+								  }
+								  request.onerror = function(event) {
+									  console.log(event);
+									  reject(event);
+								  }
+							  });
+						  }
+						  db.get = function(key) {
+							  return new Promise(function(resolve,reject) {
+								  var store = db.transaction("json").objectStore("json");
+								  var request = store.get(key);
+								  request.onsuccess = function(event) {
+									  resolve(request.result);
+								  }
+								  request.onerror = function(event) {
+									  console.log(event);
+									  reject(event);
+								  }
+							  });
+						  }
+					}
+					request.onerror = function(event) {
+						  console.log(event);
+						  reject(event);
+					}
+				});
+			}
+	}
 	function Server(url) {
 		var me = this;
 		try {
@@ -877,9 +980,12 @@
 			console.log("Unable to connect to remote database. Data will be synched at a later time.");
 		} 
 	}
-	Server.prototype.setItem = function(key,value) {
+	Server.prototype.put = function(key,value) {
 		var me = this;
 		return me.client.publish(me.channel,(typeof(value)==="string" ? value : JSON5.stringify(value))); 	// as stringifier so that kinds of nested objects are transmitted
+	}
+	Server.prototype.get = function(key) {
+		console.log("not yet implemented");
 	}
 	JOQULAR.Server = Server;
 	function Index() {
@@ -1232,8 +1338,8 @@
 			}
 		}
 		cons.load = function(uuid) {
-			if(cons.getItem) { // getItem defined by wrapping persistence engine
-				return cons.getItem(uuid).then(function(data) {
+			if(cons.get) { // get defined by wrapping persistence engine
+				return cons.get(uuid).then(function(data) {
 					var instance = new cons();
 					if(data) {
 						instance.setData(data);
@@ -1294,23 +1400,38 @@
 			})) {
 				return [];
 			}
-			Object.keys(pattern).every(function(patternkey) { // walk the pattern to collect all data
-				if(patternkey==="_id") {
+			Object.keys(pattern).every(function(patternkey) { // walk the pattern to collect literal matches and load indexes if required
+				if(patternkey==="_id" || patternkey.indexOf("$")===0) {
 					return true;
 				}
-				var keymap = basekeymap, testvalues = [pattern[patternkey]], objects = {}, objectvalues = [], type = (testvalues[0]==null ? "undefined" : typeof(testvalues[0])), types = [], objectkey, values, path;
+				var keymap = basekeymap, testvalue = pattern[patternkey], type = (testvalue==null ? "undefined" : typeof(testvalue));
+				objectKeys.push(patternkey);
+				if(testvalue instanceof Object){
+					results = (results ? intersection(results,cons.findIds(testvalue,objectKeys,results)) : cons.findIds(testvalue,objectKeys,results));	
+				} else { // else, if recursion not required, assemble data and do tests
+					keymap = keymap[patternkey];
+					if(!keymap || !keymap[testvalue] || !keymap[testvalue][type]) {
+						return false;
+					}
+					if(!keymap[testvalue][type].keys) { // if not cached, lookup and cache
+						Object.defineProperty(keymap[testvalue][type],"keys",{enumerable:false,writable:false,value:Object.keys(keymap[testvalue][type])});
+					}
+					results = (results ? intersection(results,keymap[testvalue][type].keys) : keymap[testvalue][type].keys);
+				}
+				objectKeys.pop();
+				return results && results.length>0 // if there are no results at this point, then abort every
+			});
+			Object.keys(pattern).every(function(patternkey) { // walk the pattern to collect non literal matches
+				if(patternkey==="_id" || patternkey.indexOf("$")!==0) {
+					return true;
+				}
+				var keymap = basekeymap, testvalues = [pattern[patternkey]], objects = {}, objectvalues = [], type = (testvalues[0]==null ? "undefined" : typeof(testvalues[0])), types = [];
 				objectKeys.push(patternkey);
 				// handle values that require recursion, e.g. {name: {$eq: {$self '/child/name'}}}
 				var hasself = (pattern[patternkey] && pattern[patternkey].$self ? true : false);
 				if(patternkey!=="$self" && testvalues[0] instanceof Object && !(testvalues[0] instanceof Function) && (hasself || !(patternkey.indexOf("$")===0 && JOQULAR.predicates[patternkey]))){
 					results = (results ? intersection(results,cons.findIds(pattern[patternkey],objectKeys,results)) : cons.findIds(pattern[patternkey],objectKeys,results));	
 				} else { // else, if recursion not required, assemble data and do tests
-					if(patternkey.indexOf("$")===-1) {
-						keymap = keymap[patternkey];
-					}
-					if(!keymap) {
-						return false;
-					}
 					Object.keys(keymap).forEach(function(value) {
 						Object.keys(keymap[value]).forEach(function(type) {
 							if(isDataType(type) && keymap[value][type]) {
@@ -1347,7 +1468,7 @@
 							}
 						}
 					}
-					loadFromIndex(objects,keymap,objectvalues);
+					//loadFromIndex(objects,keymap,objectvalues);
 	
 					if(patternkey==="$self") {
 						testvalues = cons.self(pattern[patternkey],keymap,types); // should we actually be limiting types?
@@ -1554,6 +1675,7 @@
 	JOQULAR.select = function(projection) {
 		return new Select(projection);
 	}
+	JOQULAR.createIndexedDBStore = IndexedDBStore.create;
 	JOQULAR.db = function(name,location) {
 		return new Database(name,location);
 	}

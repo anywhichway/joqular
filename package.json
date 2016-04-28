@@ -1,7 +1,7 @@
 {
   "name": "joqular",
   "version": "2.0.1",
-  "description": "Fully indexed browser and server Javascript database with projections, joins, statistical sampling and simple extensibility.",
+  "description": "Fully indexed browser and server LevelDown backed Javascript database with projections, joins, statistical sampling and simple extensibility.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/anywhichway/joqular.git"
@@ -12,12 +12,26 @@
     "PouchDB",
     "IndexedDB",
     "Cloudbase",
-    "Forerunner"
+    "Forerunner",
+    "LevelUp",
+    "LevelDown"
   ],
   "author": "Simon Y. Blackwell <syblackwell@anywhichway.com> (http://www.github.com/anywhichway)",
   "license": "GPL 3",
   "bugs": {
     "url": "https://github.com/anywhichway/joqular/issues"
   },
-  "homepage": "https://github.com/anywhichway/joqular#readme"
+  "homepage": "https://github.com/anywhichway/joqular#readme",
+  "devDependencies": {
+    "chai": "^3.5.0",
+    "codeclimate-test-reporter": "^0.3.1",
+    "istanbul": "^0.4.2",
+    "mocha": "^2.4.5"
+  },
+  "dependencies": {
+    "js-generics": "0.0.6",
+    "level-browserify": "^1.1.0",
+    "nested-object-model": "0.0.7",
+    "node-uuid": "^1.4.7"
+  }
 }

@@ -111,7 +111,7 @@ app.use(function(req, res, next) {
   next();
 });
 
-noderequire.export(app,__dirname,["node-require","about-time","chrome-proxy","js-generics","proxy-observe","nested-object-model","jovial","joex","node-uuid","sessionstorage"],{min:true});
+noderequire.export(app,__dirname,["node-require","about-time","chrome-proxy","js-generics","proxy-observe","nested-object-model","jovial","joex","node-uuid","sessionstorage","bluebird"],{min:true});
 //app.use('/', routes);
 app.use('/users', users);
 app.use(express.static(path.join(__dirname, 'public')));

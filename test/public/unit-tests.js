@@ -704,61 +704,64 @@
 		var testobjects = db.collection("Entity",{schema:EntityValidator});
 		var loaded =  performance.now();
 		console.log("Load Time:",loaded-start);
-		testobjects.stream(false);
-		var find = Math.floor((Math.random() * 100) + 1)
-		var i = 5; //5000; //10000;
+		var i = 100000; //5000; //10000;
+		new Entity({testId:0});
+		var find = 0; //Math.floor((Math.random() * i) + 1);
 		var start =  performance.now();
 		for(var j=0;j<i;j++) {
-			var e = new Entity({testId:Math.floor((Math.random() * 100) + 1)});//.setData({testId:Math.floor((Math.random() * 100) + 1)});
+			var e = new Entity({testId:Math.floor((Math.random() * i) + 1)});//.setData({testId:Math.floor((Math.random() * 100) + 1)});
 		}
 		var created =  performance.now();
-		console.log("Create Time:",created-start);
+		console.log("Create Time:",created-start,1000/((created-start)/i));
+		var startselect = performance.now();
+		var select = JOQULAR.select().from({p1: 'Entity'}).where({p1: {testId: find}}).exec();
+		select.then(function(results) {
+			var selected =  performance.now();
+			console.log("Select Time:",selected-startselect,(selected-startselect)/i,results.length);
+			var startreselect = performance.now();
+			var reselect = JOQULAR.select().from({p1: 'Entity'}).where({p1: {testId: find}}).exec();
+			reselect.then(function(results) {
+				var reselected =  performance.now();
+				console.log("Reselect Time:",reselected-startreselect,(reselected-startreselect)/i,results.length);
+			});
+		});
+		var startidfind = performance.now();
+		var ids = Entity.findIds({testId: find});
+		var idsfound = performance.now();;
+		console.log("Id Find Time:",idsfound-startidfind,1000/((idsfound-startidfind)/ids.length),ids.length);
+		var startfind = performance.now();
+		var os = Entity.find({testId: find},function(err,cached) { console.log("Cached Find Time:",performance.now()-startfind,cached.length) });
+		os.then(function(results) {
+			var found = performance.now();;
+			console.log("Object Find Time:",found-startfind,1000/((found-startfind)/results.length),results.length);
+		});
+		var startsave =  performance.now();
 		var save = testobjects.save();
 		save.then(function(err) {
 			if(err) {
 				console.log(err);
 			}
 			var saved =  performance.now();
-			console.log("Save Time:",saved-created);
-		});
-		var startselect = performance.now();
-		var select = JOQULAR.select().from({p1: 'Entity'}).where({p1: {testId: find}}).exec();
-		select.then(function(results) {
-			var selected =  performance.now();
-			console.log("Select Time:",selected-startselect,results.length);
-		});
-		var startreselect = performance.now();
-		var reselect = JOQULAR.select().from({p1: 'Entity'}).where({p1: {testId: find}}).exec();
-		reselect.then(function(results) {
-			var reselected =  performance.now();
-			console.log("Reselect Time:",reselected-startreselect,results.length);
-		});
-		var startidfind = performance.now();
-		var ids = Entity.findIds({testId: find});
-		var idsfound = performance.now();;
-		console.log("Id Find Time:",idsfound-startidfind,ids.length);
-		var startfind = performance.now();
-		var os = Entity.find({testId: find},function(err,cached) { console.log("Cached Find Time:",performance.now()-startfind,cached.length) });
-		os.then(function(results) {
-			var found = performance.now();;
-			console.log("Object Find Time:",found-startfind,results.length);
-		});
-		var startflush =  performance.now();
-		testobjects.flush();
-		var flushed =  performance.now();
-		console.log("Flush Time:",flushed-startflush);
-		var startrefind = performance.now();
-		var ros = Entity.find({testId: find},function(err,cached) { console.log("Cached Refind Time:",performance.now()-startfind,cached.length) });
-		ros.then(function(results) {
-			var refound = performance.now();;
-			console.log("Refind Time:",refound-startrefind,results.length);
-		});
-		testobjects.flush();
-		var startload =  performance.now();
-		var load = JOQULAR.select().from({p1: 'Entity'}).where({p1: {testId: find}}).exec();
-		load.then(function(results) {
-			var loaded =  performance.now();
-			console.log("Load Time:",loaded-startload,results.length);
+			console.log("Save Time:",saved-startsave,1000/((saved-startsave)/i));
+			testobjects.flush();
+			var flushed =  performance.now();
+			console.log("Flush Time:",flushed-saved,1000/((flushed-saved)/i));
+			var ros = Entity.find({testId: find},function(err,cached) { console.log("Uncached Refind Time:",performance.now()-startfind,cached.length) });
+			ros.then(function(results) {
+				var refound = performance.now();;
+				console.log("Refind Time:",refound-flushed,(refound-flushed)/i,results.length);
+			});
+			testobjects.flush();
+			var startload =  performance.now();
+			var load = JOQULAR.select().from({p1: 'Entity'}).where({p1: {testId: find}}).exec();
+			load.then(function(results) {
+				var loaded =  performance.now();
+				console.log("Load From Search Time:",loaded-startload,1000/((loaded-startload)/results.length),results.length);
+				testobjects.load().then(function() {
+					var cloaded =  performance.now();
+					console.log("Load From Search Time:",loaded-startload,1000/((cloaded-loaded)/1));
+				});
+			});
 		});
 	}
 	if (typeof(module) != 'undefined' && module.exports) {
