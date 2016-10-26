@@ -2,6 +2,8 @@
 
 NOTE: 
 
+2016-10-25: JOQULAR has now been replaced by ReasonDB: https://github.com/anywhichway/reasondb. There were extensive delays due to differences in behavior of Promises in the broweser and  nodejs. Many of these were resolved by moving to asycn/await programming and the use of Babel. Although the pattern matching language is not fully implemented, SQL like functionality and joins are now supported as is persistence in both the browser and on the server. Some of the other feratures in the ALPHA have also be dropped for now. The code base is half the size.
+
 2016-04-28: With the release of Node v6.0 on April 26th, 2016 we are able to re-start development of JOQULAR 2.0 and move from Alpha to Beta in the next month or so.
 
 
