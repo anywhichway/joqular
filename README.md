@@ -1,5 +1,7 @@
 # joqular
 
+**NOTE**: JOQULAR has now been replaced by ReasonDB: https://github.com/anywhichway/
+
 JavaScript Object Query Language Representation - Funny, it's mostly JSON.
 
 - Serializable pattern and SQL like object matching for JavaScript, including joins!
