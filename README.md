@@ -1,6 +1,6 @@
 # joqular
 
-**NOTE**: JOQULAR has now been replaced by ReasonDB: https://github.com/anywhichway/
+**NOTE**: JOQULAR has now been replaced by ReasonDB: https://github.com/anywhichway/reasondb
 
 JavaScript Object Query Language Representation - Funny, it's mostly JSON.
 
