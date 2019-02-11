@@ -1,7 +1,7 @@
 {
   "name": "joqular",
-  "version": "2.0.0b",
-  "description": "(JOQULAR - JavaScript Object Query Language Representation) For JSON data matching, transformation, and extraction",
+  "version": "2.0.1b",
+  "description": "JOQULAR (JavaScript Object Query Language Representation) for JSON data matching, transformation, validation and extraction",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

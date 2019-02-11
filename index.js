@@ -46,6 +46,7 @@
 		},
 		FUNCTIONS = {},
 		JOQULAR = {},
+		UNDEFINED = ()=>undefined,
 		addFunction = (f,name=f.name) => {
 			if(!name || name==="anonymous") {
 				throw new Error("JOQULAR.function: A function name must be provided");
@@ -76,6 +77,54 @@
 			}
 			return data;
 		},
+		deepEqual = (a,b) => {
+			const atype = typeof(a),
+				btype = typeof(b);
+			if(atype!==btype) return false;
+			if((a && !b) || (!a && b)) return false;
+			if(a && a.length!==b.length) return false;
+			if(atype==="number" && isNaN(a) && isNaN(b)) return true;
+			if(a && atype==="object") {
+				if(a instanceof Date || b instanceof Date) {
+					if(!(a instanceof Date)) return false;
+					if(!(b instanceof Date)) return false;
+					if(a.getTime()!==b.getTime()) return false;
+					return true;
+				}
+				if(!Array.isArray(a) && Symbol.iterator in a) {
+					if(Array.isArray(b) || !(Symbol.iterator in b)) {
+						return false;
+					}
+					const aentries = [],
+						bentries = [];
+					a.forEach(item = aentries.push(item));
+					b.forEach(item = bentries.push(item));
+					return deepEqual(aentries,bentries);
+				}
+				const checked = {},
+					akeys = Object.keys(a),
+					bkeys = Object.keys(b);
+				if(akeys.length!==bkeys.length) {
+					return false;
+				}
+				if(!akeys.every((key) => {
+					checked[key] = true;
+					return deepEqual(a[key],b[key]);
+				})) {
+					return false;
+				}
+				if(!bkeys.every((key) => {
+					if(checked[key]) {
+						return true;
+					}
+					return deepEqual(a[key],b[key]);
+				})) {
+					return false;
+				}
+				return true;
+			}
+			return a===b;
+		},
 		deleteFunction = (name) => {
 			if(!name || name==="anonymous") {
 				throw new Error("JOQULAR.function: A function name must be provided");
@@ -105,11 +154,22 @@
 			}
 			return false;
 		},
-		match = async (pattern,value,extracted={}) => {
-			const copy = deepCopy(value);
-			return matchaux(pattern,copy,extracted)
+		extract = async (pattern,value) => {
+			const extracted = {};
+			if(matchaux(pattern,value,extracted)) {
+				return extracted;
+			}
 		},
-		matchaux = async (pattern,value,extracted={},objectKey,object) => {
+		match = async (pattern,...values) => {
+			const results = [];
+			for(const value of values) {
+				const copy = deepCopy(value),
+					matched = await matchaux(pattern,copy,{});
+				results.push(deepEqual(matched,value) ? value : matched);
+			}
+			return results;
+		},
+		matchaux = async (pattern,value,extracted,objectKey,object) => {
 			if(pattern===null || pattern===value) return value;
 			const ptype=typeof(pattern),
 				vtype = typeof(value);
@@ -173,6 +233,7 @@
 						}
 					}
 				}
+				if(value && value._proxy) return value._proxy;
 				return value;
 			}
 		},
@@ -205,7 +266,7 @@
 				this[as] = value;
 				return true;
 			},
-			$avg(iterable,as) {
+			$avg(iterable,as,key) {
 				if(Symbol.iterator in Object(iterable)) {
 					let sum = 0,
 						count = 0;
@@ -218,11 +279,11 @@
 							count++;
 						}
 					}
-					this[as] = sum/count;
+					this[as||key] = sum/count;
 					return true;
 				}
 			},
-			$avga(iterable,as) {
+			$avga(iterable,as,key) {
 				if(Symbol.iterator in Object(iterable)) {
 					let sum = 0,
 						count = 0;
@@ -242,7 +303,7 @@
 							count++;
 						}
 					}
-					this[as] = sum/count;
+					this[as||key] = sum/count;
 					return true;
 				}
 			},
@@ -259,30 +320,30 @@
 				this[key] = typeof(f)==="function" ? f(value,key,this) : f;
 				return true;
 			},
-			$count(iterable,as) {
+			$count(iterable,as,key) {
 				if(Symbol.iterator in Object(iterable)) {
 					let count = 0;
 					for(let value of iterable) {
 						if(value!==undefined) count++;
 					}
-					this[as] = count;
+					this[as||key] = count;
 					return true;
 				}
 			},
-			$counta(iterable,as) {
+			$counta(iterable,as,key) {
 				if(Symbol.iterator in Object(iterable)) {
 					if(iterable.length!==undefined) {
-						this[as] = iterable.length
+						this[as||key] = iterable.length
 					} else if(typeof(iterable.count)==="function") {
-						this[as] = iterable.count();
+						this[as||key] = iterable.count();
 					} else if(typeof(iterable.size)==="function") {
-						this[as] = iterable.size();
+						this[as||key] = iterable.size();
 					} else {
 						let count = 0;
 						for(let value of iterable) {
 							count++;
 						}
-						this[as] = iterable.size();
+						this[as||key] = iterable.size();
 					}
 					return true;
 				}
@@ -360,22 +421,15 @@
 			$false() {
 				return false;
 			},
-			$filter(filterable,f,key) {
-				let as, result;
-				if(Array.isArray(f)) {
-					as = f[1];
-					f = f[0];
-				}
+			$filter(filterable,spec,key) {
+				let [f,as] = Array.isArray(spec) ? spec : [spec],
+						result;
 				if(filterable && typeof(filterable.filter)==="function") {
 					result = filterable.filter((item) => f(item));
 				} else {
 					result = [];
 				}
-				if(as) {
-					this[as] = result;
-				} else {
-					this[key] = result;
-				}
+				this[as||key] = result;
 				return true;
 			},
 			async $forDescendant(target,{pattern,$,depth=Infinity},key) {
@@ -478,13 +532,9 @@
 			$lte(a,b) { 
 				return a <= b; 
 			},
-			async $map(iterable,f,key) {
+			async $map(iterable,spec,key) {
 				const results = [];
-				let as;
-				if(Array.isArray(f)) {
-					as = f[1];
-					f = f[0];
-				}
+				let [f,as] = Array.isArray(spec) ? spec : [spec];
 				if(Symbol.iterator in Object(iterable)) {
 					let key = 0;
 					for(let value of iterable) {
@@ -496,14 +546,10 @@
 						key++;
 					}
 				}
-				if(as) {
-					this[as] = results;
-				} else {
-					this[key] = results;
-				}
+				this[as||key] = results;
 				return true;
 			},
-			$matches(value,regexp) {
+			$matches(value,regexp,key) {
 				if(value) {
 					const match = value.matches||value.match;
 					if(typeof(match)==="function") {
@@ -518,15 +564,13 @@
 						}
 						const matches = match(regexp);
 						if(matches) {
-							if(as) {
-								this[as] = matches;
-							}
+							this[as||key] = matches;
 							return true;
 						}
 					}
 				}
 			},
-			$max(iterable,as) {
+			$max(iterable,as,key) {
 				if(Symbol.iterator in Object(iterable)) {
 					let max;
 					for(let value of iterable) {
@@ -535,11 +579,11 @@
 						}
 						max = max===undefined || value > max ? value : max;
 					}
-					this[as] = max;
+					this[as||key] = max;
 					return true;
 				}
 			},
-			$maxa(iterable,as) {
+			$maxa(iterable,as,key) {
 				if(Symbol.iterator in Object(iterable)) {
 					let max = -Infinity;
 					for(let value of iterable) {
@@ -557,11 +601,11 @@
 							max = value > max ? value : max;
 						}
 					}
-					this[as] = max;
+					this[as||key] = max;
 					return true;
 				}
 			},
-			$min(iterable,as) {
+			$min(iterable,as,key) {
 				if(Symbol.iterator in Object(iterable)) {
 					let min;
 					for(let value of iterable) {
@@ -570,11 +614,11 @@
 						}
 						min = min===undefined || value < min ? value : min;
 					}
-					this[as] = min;
+					this[as||key] = min;
 					return true;
 				}
 			},
-			$mina(iterable,as) {
+			$mina(iterable,as,key) {
 				if(Symbol.iterator in Object(iterable)) {
 					let min = Infinity;
 					for(let value of iterable) {
@@ -592,7 +636,7 @@
 							min = value < min ? value : min;
 						}
 					}
-					this[as] = min;
+					this[as||key] = min;
 					return true;
 				}
 			},
@@ -618,6 +662,96 @@
 						return false;
 					}
 				}
+				return true;
+			},
+			$on(value,handlers={},key) {
+				const onerror = handlers.onError;
+				let currenthandlers = {};
+				if(this._proxy) {
+					currenthandlers = this._proxy.handlers;
+				}
+				let handler = currenthandlers[key];
+				if(!handler) {
+					handler = currenthandlers[key] = {get:[],set:[],delete:[]};
+				}
+				Object.keys(handler).forEach(key => {
+					const f = handlers[key];
+					if(f) {
+						if(!handler[key].includes(f)) {
+							handler[key].push(f);
+							if(onerror) {
+								Object.defineProperty(f,"onError",{value:onerror});
+							}
+						}
+					}
+				});
+				if(value===undefined) {
+					this[key] = UNDEFINED;
+				}
+				const proxy = new Proxy(this,{
+					get(target,property) {
+						let value = property==="handlers" ? currenthandlers : target[property];
+						if(value===UNDEFINED) {
+							value = undefined;
+						}
+						if(currenthandlers[property]) {
+							currenthandlers[property].get.forEach((f) => {
+								try {
+									f(proxy,key,value);
+								} catch(e) {
+									if(f.onError) {
+										f.onError(e);
+									} else {
+										throw(e);
+									}
+								}
+							});
+						}
+						return value;
+					},
+					set(target,property,value) {
+						const oldvalue = target[property]===UNDEFINED ? undefined : target[property];
+						let error;
+						if(currenthandlers[property]) {
+							currenthandlers[property].set.forEach((f) => {
+								try {
+									f(proxy,key,value,oldvalue);
+								} catch(e) {
+									error = e;
+									if(f.onError) {
+										error = f.onError(e);
+									} else {
+										throw(e);
+									}
+								}
+							});
+						}
+						if(error) {
+							throw error;
+						}
+						target[property] = value;
+						return true;
+					},
+					deleteProperty(target,property) {
+						const value = target[property]===UNDEFINED ? undefined : target[property];
+						if(currenthandlers[property]) {
+							currenthandlers[property].delete.forEach((f) => {
+								try {
+									f(proxy,key,value);
+								} catch(e) {
+									error = e;
+									if(f.onError) {
+										error = f.onError(e);
+									} else {
+										throw(e);
+									}
+								}
+							});
+						}
+						delete target[property];
+					}
+				});
+				Object.defineProperty(this,"_proxy",{configurable:true,value:proxy});
 				return true;
 			},
 			async $or(a,tests,key) {
@@ -658,14 +792,8 @@
 				delete this[key];
 				return true;
 			},
-			async $reduce(iterable,f,key) {
-				let accum,
-					as;
-				if(Array.isArray(f)) {
-					as = f[2];
-					accum = f[1];
-					f = f[0];
-				}
+			async $reduce(iterable,spec,key) {
+				let [f,accum,as] = Array.isArray(spec) ? spec : [spec];
 				if(Symbol.iterator in Object(iterable)) {
 					let key = 0;
 					for(let value of iterable) {
@@ -677,11 +805,7 @@
 						key++;
 					}
 				}
-				if(as) {
-					this[as] = accum;
-				} else {
-					this[key] = accum;
-				}
+				this[as||key] = accum;
 				return true;
 			},
 			$return(_,value,key) {
@@ -692,7 +816,8 @@
 				}
 				return true;
 			},
-			$sample(iterable,[pct,max=Infinity],key) {
+			$sample(iterable,spec,key) {
+				let [pct,max=Infinity,as] = Array.isArray(spec) ? spec : [spec];
 				const sample = [],
 					indexes = [];
 				let i = 0;
@@ -710,7 +835,7 @@
 						}
 					}
 				}
-				this[key] = sample;
+				this[as||key] = sample;
 				return true;
 			},
 			async $search(text,phrase) {
@@ -748,25 +873,18 @@
 				}
 				return false;
 			},
-			$sort(sortable,f,key) {
-				let as, result;
-				if(Array.isArray(f)) {
-					as = f[1];
-					f = f[0];
-				}
+			$sort(sortable,spec,key) {
+				let [f,as] = Array.isArray(spec) ? spec : [spec],
+					result;
 				if(sortable && typeof(sortable.sort)==="function") {
 					result = sortable.sort((a,b) => f(a,b));
 				} else {
 					result = [];
 				}
-				if(as) {
-					this[as] = result
-				} else {
-					this[key] = result;
-				}
+				this[as||key] = result
 				return true;
 			},
-			$sum(iterable,as) {
+			$sum(iterable,as,key) {
 				if(Symbol.iterator in Object(iterable)) {
 					let sum = 0;
 					for(let value of iterable) {
@@ -777,11 +895,11 @@
 							sum =+ value;
 						}
 					}
-					this[as] = sum;
+					this[as||key] = sum;
 					return true;
 				}
 			},
-			$suma(iterable,as) {
+			$suma(iterable,as,key) {
 				if(Symbol.iterator in Object(iterable)) {
 					let sum = 0;
 					for(let value of iterable) {
@@ -799,7 +917,7 @@
 							sum =+ value;
 						}
 					}
-					this[as] = sum;
+					this[as||key] = sum;
 					return true;
 				}
 			},
