@@ -156,20 +156,20 @@
 		},
 		extract = async (pattern,value) => {
 			const extracted = {};
-			if(matchaux(pattern,value,extracted)) {
+			if(queryaux(pattern,value,extracted)) {
 				return extracted;
 			}
 		},
-		match = async (pattern,...values) => {
+		query = async (pattern,...values) => {
 			const results = [];
 			for(const value of values) {
 				const copy = deepCopy(value),
-					matched = await matchaux(pattern,copy,{});
-				results.push(deepEqual(matched,value) ? value : matched);
+					queryed = await queryaux(pattern,copy,{});
+				results.push(deepEqual(queryed,value) ? value : queryed);
 			}
 			return results;
 		},
-		matchaux = async (pattern,value,extracted,objectKey,object) => {
+		queryaux = async (pattern,value,extracted,objectKey,object) => {
 			if(pattern===null || pattern===value) return value;
 			const ptype=typeof(pattern),
 				vtype = typeof(value);
@@ -202,12 +202,12 @@
 						predicate =  FUNCTIONS[key] ? FUNCTIONS[key] : typeof(pattern[key])==="function" ? pattern[key] : undefined;
 					if(pkeytype!=="function" && predicate) {
 						if(typeof(pattern[key])==="function" && !FUNCTIONS[key]) {
-							if(!(await predicate.call(value,value[key],predicate,key))) {
+							if(!(await predicate.call(value,value[key],predicate,key,value))) {
 								return;
 							}
 							extracted[key] = value[key];
 						} else {
-							if(!(await predicate.call(object,value,pattern[key],objectKey))) {
+							if(!(await predicate.call(object,value,pattern[key],objectKey,object))) {
 								return;
 							}
 							if(value===undefined) {
@@ -224,11 +224,11 @@
 								return;
 							}
 							for(const vkey of keys) {
-								if((await matchaux(pattern[key],value[vkey],extracted,vkey,value)===undefined)) {
+								if((await queryaux(pattern[key],value[vkey],extracted,vkey,value)===undefined)) {
 									return;
 								}
 							}
-						} else if((await matchaux(pattern[key],value[key],extracted,key,value)===undefined)) {
+						} else if((await queryaux(pattern[key],value[key],extracted,key,value)===undefined)) {
 							return;
 						}
 					}
@@ -262,7 +262,6 @@
 				}
 			},
 			$as(value,as,key) {
-				delete this[key];
 				this[as] = value;
 				return true;
 			},
@@ -359,7 +358,7 @@
 				return true;
 			},
 			async $descendant(target,pattern,key) {
-				if(JOQULAR.match(pattern,target,{},key,this)!==undefined) return true;
+				if(JOQULAR.query(pattern,target,{},key,this)!==undefined) return true;
 				if(!target || typeof(target)!=="object") return true;
 				for(const key of Object.keys(target)) {
 					if((await FUNCTIONS.$descendant.call(target,target[key],pattern,key))) {
@@ -376,7 +375,10 @@
 			$eeq(a,b) { 
 				return a === b; 
 			},
-			$eq(a,b) { 
+			$eq(a,b) {
+				if(a && b && typeof(a)==="object" && typeof(b)==="object") {
+					return deepEqual(a,b);
+				}
 				return a == b; 
 			},
 			async $every(iterable,f) {
@@ -399,7 +401,7 @@
 			},
 			async $extract(target,pattern,key) {
 				const extracted = {};
-				if((await JOQULAR.match(pattern,target,extracted,key,this))!==undefined) {
+				if((await JOQULAR.query(pattern,target,extracted,key,this))!==undefined) {
 					this[key] = extracted;
 				}
 				return true;
@@ -432,11 +434,14 @@
 				this[as||key] = result;
 				return true;
 			},
-			async $forDescendant(target,{pattern,$,depth=Infinity},key) {
-				JOQULAR.match(pattern,target,{},key,this);
-				if(!target || typeof(target)!=="object" || depth===0) return true;
+			async $forDescendant(target,{pattern,f,depth=Infinity},key,seen=new Set()) {
+				if(JOQULAR.query(pattern,target,{},key,this)!==undefined) {
+					await f(target,key,this);
+				}
+				if(!target || typeof(target)!=="object" || depth===0 && !seen.has(target)) return true;
+				seen.add(target);
 				for(const key of Object.keys(target)) {
-					await FUNCTIONS.$forDescendant.call(target,target[key],{pattern,$,depth:depth-1},key);
+					await $forDescendant.call(target,target[key],{pattern,$,depth:depth-1},key,seen);
 				}
 				return true;
 			},
@@ -488,8 +493,8 @@
 			$intersects(a,b) {
 				return Array.isArray(a) && Array.isArray(b) && intersection(a,b).length>0;
 			},
-			$isAny() {
-				return true;
+			$isAny(a,types=["boolean","function","number","object","string"]) {
+				return types.includes(typeof(a));
 			},
 			async $isArray(value) { 
 				return Array.isArray(value);
@@ -551,8 +556,8 @@
 			},
 			$matches(value,regexp,key) {
 				if(value) {
-					const match = value.matches||value.match;
-					if(typeof(match)==="function") {
+					const query = value.matches||value.query;
+					if(typeof(query)==="function") {
 						let as;
 						if(Array.isArray(regexp)) {
 							as = regexp[2];
@@ -562,7 +567,7 @@
 								;
 							}
 						}
-						const matches = match(regexp);
+						const matches = query(regexp);
 						if(matches) {
 							this[as||key] = matches;
 							return true;
@@ -641,6 +646,9 @@
 				}
 			},
 			$neq(a,b) { 
+				if(a && b && typeof(a)==="object" && typeof(b)==="object") {
+					return !deepEqual(a,b);
+				}
 				return a != b; 
 			},
 			$neeq(a,b) { 
@@ -700,7 +708,7 @@
 									f(proxy,key,value);
 								} catch(e) {
 									if(f.onError) {
-										f.onError(e);
+										f.onError(e,proxy,key,value);
 									} else {
 										throw(e);
 									}
@@ -717,9 +725,8 @@
 								try {
 									f(proxy,key,value,oldvalue);
 								} catch(e) {
-									error = e;
 									if(f.onError) {
-										error = f.onError(e);
+										f.onError(e,proxy,key,value,oldvalue);
 									} else {
 										throw(e);
 									}
@@ -739,9 +746,8 @@
 								try {
 									f(proxy,key,value);
 								} catch(e) {
-									error = e;
 									if(f.onError) {
-										error = f.onError(e);
+										f.onError(e,proxy,key,value);
 									} else {
 										throw(e);
 									}
@@ -781,15 +787,23 @@
 				}
 			},
 			$readonly(value,_,key) {
-				try {
-					this[key] = value;
-					return false;
-				} catch(e) {
-					return true;
+				if(this[key]!==undefined || Object.getOwnPropertyDescriptor(this,key)) {
+					try {
+						this[key] = value; // setting to is existing value, so no harm
+						return false;
+					} catch(e) {
+						return true;
+					}
 				}
 			},
-			$redact(_1,_2,key) {
-				delete this[key];
+			async $redact(value,f,key) {
+				if(typeof(f)==="function") {
+					if(await f(value,key,this)) {
+						delete this[key];
+					}
+				} else {
+					delete this[key];
+				}
 				return true;
 			},
 			async $reduce(iterable,spec,key) {
@@ -824,6 +838,7 @@
 				// get count random items from an iterable
 				if(Symbol.iterator in Object(iterable)) {
 					for(const item of iterable) {
+						i++;
 						const rand = Math.random();
 						if(rand<=pct) {
 							if(Array.isArray(iterable)) {
@@ -835,7 +850,8 @@
 						}
 					}
 				}
-				this[as||key] = sample;
+				const length = Math.min(max,Math.round(i * pct));
+				this[as||key] = sample.slice(0,length);
 				return true;
 			},
 			async $search(text,phrase) {
@@ -992,7 +1008,8 @@
 	Object.defineProperty(JOQULAR,"undefine",{value:deleteFunction});
 	Object.defineProperty(JOQULAR,"register",{value:register});
 	Object.defineProperty(JOQULAR,"unregister",{value:unregister});
-	Object.defineProperty(JOQULAR,"match",{value:match});
+	Object.defineProperty(JOQULAR,"query",{value:query});
+	Object.defineProperty(JOQULAR,"match",{value:query});
 	Object.assign(FUNCTIONS,functions);
 	
 	if(typeof(module)!=="undefined") module.exports = JOQULAR;

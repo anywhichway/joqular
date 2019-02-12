@@ -1,6 +1,6 @@
 {
   "name": "joqular",
-  "version": "2.0.1b",
+  "version": "2.0.2b",
   "description": "JOQULAR (JavaScript Object Query Language Representation) for JSON data matching, transformation, validation and extraction",
   "main": "index.js",
   "scripts": {
