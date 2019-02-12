@@ -297,7 +297,7 @@ describe("Test",function() {
 		return JOQULAR.query({data:{$sample:[.5,5]}},testobject)
 			.then(([object]) => { 
 				testvalidator(object); 
-				chai.expect(object.data.length).equal(5); 
+				chai.expect(object.data.length==4||object.data.length==5).equal(true); 
 			})
 	});
 	it("$echoes",function() {
@@ -406,4 +406,22 @@ describe("Test",function() {
 				chai.expect(event[2]).equal(undefined);
 			})
 	});
+	it("$search",function() {
+		return JOQULAR.query({email:{$search:"someone"}},testobject)
+		.then(([object]) => { 
+			testvalidator(object);
+		}) 
+	});
+	it("$search pct",function() {
+		return JOQULAR.query({email:{$search:["someone",.5]}},testobject)
+		.then(([object]) => { 
+			testvalidator(object);
+		}) 
+	});
+	it("$search trigram",function() {
+		return JOQULAR.query({email:{$search:["someone",1.0]}},testobject)
+		.then(([object]) => { 
+			testvalidator(object);
+		}) 
+	})
 });

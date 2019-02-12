@@ -35,6 +35,215 @@
 		return g;
 	}
 	
+	function trigrams(tokens) {
+		const grams = [],
+			str = Array.isArray(tokens) ? tokens.join("") : tokens+"";
+		for(let i=0;i<str.length-2;i++) {
+			grams.push(str.substring(i,i+3));
+		}
+		return grams;
+	}
+	
+	const STOPWORDS = {
+			en: [
+			  'a', 'about', 'after', 'ala', 'all', 'also', 'am', 'an', 'and', 'another', 'any', 'are', 
+			  'around','as', 'at', 'be',
+			  'because', 'been', 'before', 'being', 'between', 'both', 'but', 'by', 'came', 'can',
+			  'come', 'could', 'did', 'do', 'each', 'for', 'from', 'get', 'got', 'has', 'had',
+			  'he', 'have', 'her', 'here', 'him', 'himself', 'his', 'how', 'i', 'if', 'iff', 'in', 
+			  'include', 'into',
+			  'is', 'it', 'like', 'make', 'many', 'me', 'might', 'more', 'most', 'much', 'must',
+			  'my', 'never', 'now', 'of', 'on', 'only', 'or', 'other', 'our', 'out', 'over',
+			  'said', 'same', 'see', 'should', 'since', 'some', 'still', 'such', 'take', 'than',
+			  'that', 'the', 'their', 'them', 'then', 'there', 'these', 'they', 'this', 'those',
+			  'through', 'to', 'too', 'under', 'up', 'very', 'was', 'way', 'we', 'well', 'were',
+			  'what', 'where', 'which', 'while', 'who', 'with', 'would', 'you', 'your']
+	};
+	
+//stemmer from https://github.com/words/stemmer MIT License, Titus Wormer
+	/* Character code for `y`. */
+	var CC_Y = 'y'.charCodeAt(0);
+
+	/* Standard suffix manipulations. */
+	var step2list = {
+	  ational: 'ate',
+	  tional: 'tion',
+	  enci: 'ence',
+	  anci: 'ance',
+	  izer: 'ize',
+	  bli: 'ble',
+	  alli: 'al',
+	  entli: 'ent',
+	  eli: 'e',
+	  ousli: 'ous',
+	  ization: 'ize',
+	  ation: 'ate',
+	  ator: 'ate',
+	  alism: 'al',
+	  iveness: 'ive',
+	  fulness: 'ful',
+	  ousness: 'ous',
+	  aliti: 'al',
+	  iviti: 'ive',
+	  biliti: 'ble',
+	  logi: 'log'
+	};
+
+	var step3list = {
+	  icate: 'ic',
+	  ative: '',
+	  alize: 'al',
+	  iciti: 'ic',
+	  ical: 'ic',
+	  ful: '',
+	  ness: ''
+	};
+
+	/* Consonant-vowel sequences. */
+	var consonant = '[^aeiou]';
+	var vowel = '[aeiouy]';
+	var consonantSequence = '(' + consonant + '[^aeiouy]*)';
+	var vowelSequence = '(' + vowel + '[aeiou]*)';
+
+	var MEASURE_GT_0 = new RegExp(
+	  '^' + consonantSequence + '?' + vowelSequence + consonantSequence
+	);
+
+	var MEASURE_EQ_1 = new RegExp(
+	  '^' + consonantSequence + '?' + vowelSequence + consonantSequence +
+	  vowelSequence + '?$'
+	);
+
+	var MEASURE_GT_1 = new RegExp(
+	  '^' + consonantSequence + '?' +
+	  '(' + vowelSequence + consonantSequence + '){2,}'
+	);
+
+	var VOWEL_IN_STEM = new RegExp(
+	  '^' + consonantSequence + '?' + vowel
+	);
+
+	var CONSONANT_LIKE = new RegExp(
+	  '^' + consonantSequence + vowel + '[^aeiouwxy]$'
+	);
+
+	/* Exception expressions. */
+	var SUFFIX_LL = /ll$/;
+	var SUFFIX_E = /^(.+?)e$/;
+	var SUFFIX_Y = /^(.+?)y$/;
+	var SUFFIX_ION = /^(.+?(s|t))(ion)$/;
+	var SUFFIX_ED_OR_ING = /^(.+?)(ed|ing)$/;
+	var SUFFIX_AT_OR_BL_OR_IZ = /(at|bl|iz)$/;
+	var SUFFIX_EED = /^(.+?)eed$/;
+	var SUFFIX_S = /^.+?[^s]s$/;
+	var SUFFIX_SSES_OR_IES = /^.+?(ss|i)es$/;
+	var SUFFIX_MULTI_CONSONANT_LIKE = /([^aeiouylsz])\1$/;
+	var STEP_2 = new RegExp(
+	  '^(.+?)(ational|tional|enci|anci|izer|bli|alli|entli|eli|ousli|' +
+	  'ization|ation|ator|alism|iveness|fulness|ousness|aliti|iviti|' +
+	  'biliti|logi)$'
+	);
+	var STEP_3 = /^(.+?)(icate|ative|alize|iciti|ical|ful|ness)$/;
+	var STEP_4 = new RegExp(
+	  '^(.+?)(al|ance|ence|er|ic|able|ible|ant|ement|ment|ent|ou|ism|ate|' +
+	  'iti|ous|ive|ize)$'
+	);
+
+	/* Stem `value`. */
+	function stemmer(value) {
+	  var firstCharacterWasLowerCaseY;
+	  var match;
+
+	  value = String(value).toLowerCase();
+
+	  /* Exit early. */
+	  if (value.length < 3) {
+	    return value;
+	  }
+
+	  /* Detect initial `y`, make sure it never matches. */
+	  if (value.charCodeAt(0) === CC_Y) {
+	    firstCharacterWasLowerCaseY = true;
+	    value = 'Y' + value.substr(1);
+	  }
+
+	  /* Step 1a. */
+	  if (SUFFIX_SSES_OR_IES.test(value)) {
+	    /* Remove last two characters. */
+	    value = value.substr(0, value.length - 2);
+	  } else if (SUFFIX_S.test(value)) {
+	    /* Remove last character. */
+	    value = value.substr(0, value.length - 1);
+	  }
+
+	  /* Step 1b. */
+	  if (match = SUFFIX_EED.exec(value)) {
+	    if (MEASURE_GT_0.test(match[1])) {
+	      /* Remove last character. */
+	      value = value.substr(0, value.length - 1);
+	    }
+	  } else if ((match = SUFFIX_ED_OR_ING.exec(value)) && VOWEL_IN_STEM.test(match[1])) {
+	    value = match[1];
+
+	    if (SUFFIX_AT_OR_BL_OR_IZ.test(value)) {
+	      /* Append `e`. */
+	      value += 'e';
+	    } else if (SUFFIX_MULTI_CONSONANT_LIKE.test(value)) {
+	      /* Remove last character. */
+	      value = value.substr(0, value.length - 1);
+	    } else if (CONSONANT_LIKE.test(value)) {
+	      /* Append `e`. */
+	      value += 'e';
+	    }
+	  }
+
+	  /* Step 1c. */
+	  if ((match = SUFFIX_Y.exec(value)) && VOWEL_IN_STEM.test(match[1])) {
+	    /* Remove suffixing `y` and append `i`. */
+	    value = match[1] + 'i';
+	  }
+
+	  /* Step 2. */
+	  if ((match = STEP_2.exec(value)) && MEASURE_GT_0.test(match[1])) {
+	    value = match[1] + step2list[match[2]];
+	  }
+
+	  /* Step 3. */
+	  if ((match = STEP_3.exec(value)) && MEASURE_GT_0.test(match[1])) {
+	    value = match[1] + step3list[match[2]];
+	  }
+
+	  /* Step 4. */
+	  if (match = STEP_4.exec(value)) {
+	    if (MEASURE_GT_1.test(match[1])) {
+	      value = match[1];
+	    }
+	  } else if ((match = SUFFIX_ION.exec(value)) && MEASURE_GT_1.test(match[1])) {
+	    value = match[1];
+	  }
+
+	  /* Step 5. */
+	  if (
+	    (match = SUFFIX_E.exec(value)) &&
+	    (MEASURE_GT_1.test(match[1]) || (MEASURE_EQ_1.test(match[1]) && !CONSONANT_LIKE.test(match[1])))
+	  ) {
+	    value = match[1];
+	  }
+
+	  if (SUFFIX_LL.test(value) && MEASURE_GT_1.test(value)) {
+	    value = value.substr(0, value.length - 1);
+	  }
+
+	  /* Turn initial `Y` back to `y`. */
+	  if (firstCharacterWasLowerCaseY) {
+	    value = 'y' + value.substr(1);
+	  }
+
+	  return value;
+	}
+	
+	function tokenize(value) { return value.replace(/[<>"'\{\}\[\]\(\)\-\=\+\*\~\n\t\:\.\;\:\$\#\%\&\*\^\!\~\<\>\,\?\`\'\"]/g," ").toLowerCase().split(" "); }
+	
 	
 	const CTORS = {
 			Object,
@@ -125,6 +334,12 @@
 			}
 			return a===b;
 		},
+		deepFreeze = (object) => {
+			if(object && typeof(object)==="object") {
+				Object.keys(object).forEach(key => deepFreeze(object[key]));
+				Object.freeze(object);
+			}
+		},
 		deleteFunction = (name) => {
 			if(!name || name==="anonymous") {
 				throw new Error("JOQULAR.function: A function name must be provided");
@@ -175,6 +390,9 @@
 				vtype = typeof(value);
 			if(pattern && ptype=="object") {
 				for(const key in pattern) {
+					if(key==="onError") {
+						continue;
+					}
 					let pkey = key;
 					if(key==="$_") {
 						pkey = () => true;
@@ -369,6 +587,12 @@
 			$disjoint(a,b) {
 				return !this.$intersects(a,b);
 			},
+			$disjunction(a,b) {
+				if(Array.isArray(a) && Array.isArray(b)) {
+					this[b.as||key] = disjunction(a,b);
+					return true;
+				}
+			},
 			$echoes(a,b) { 
 				return soundex(a)===soundex(b); 
 			},
@@ -396,8 +620,9 @@
 						}
 						key++;
 					}
+					return true;
 				}
-				return true;
+				return false;
 			},
 			async $extract(target,pattern,key) {
 				const extracted = {};
@@ -445,16 +670,30 @@
 				}
 				return true;
 			},
-			$freeze(value,property,key) {
-				const type = typeof(value);
-				if(value && type==="object") {
-					Object.freeze(value);
+			async $forEach(iterable,f,key) {
+				if(Symbol.iterator in Object(iterable)) {
+					let key = 0;
+					for(let value of iterable) {
+						if(Array.isArray(iterable)) {
+							results.push(await f(value,key,iterable));
+						} else {
+							results.push(await f(value[1],value[0],iterable));
+						}
+						key++;
+					}
+					return true;
 				}
-				if(property) {
-					try {
-						Object.defineProperty(this,key,{enumerable:true,value});
-					} catch(e) {
-						;
+				return false;
+			},
+			$freeze(value,deep,key) {
+				if(value==null) {
+					value = {};
+				}
+				if(value && typeof(value)==="object") {
+					if(deep) {
+						deepFreeze(value);
+					} else {
+						Object.freeze(value);
 					}
 				}
 				return true;
@@ -472,23 +711,33 @@
 				if(value && typeof(value.in)==="function") {
 					return value.in(includer);
 				}
+				if(value && typeof(value.has)==="function") {
+					return value.has(includer);
+				}
 				if(includer && typeof(includer.includes)==="function") {
 					return includer.includes(value);
 				}
-			},
-			$includes(includer,value) {
-				if(includer) {
-					if(typeof(includer.includes)==="function") {
-						return includer.includes(value);
-					}
-					if(typeof(includer.excludes)==="function") {
-						return !includer.excludes(value);
+				if(includer && typeof(includer.contains)==="function") {
+					return includer.contains(value);
+				}
+				if(Symbol.iterator in Object(includer)) {
+					for(let item of includer) {
+							if(item[1]===value) return true;
 					}
 				}
+			},
+			$includes(includer,value) {
+				return FUNCTIONS.$in(value,includer);
 			},
 			$instanceof(a,b) {
 				b = typeof(b)==="string" ? CTORS[b] : b;
 				return a && typeof(a)==="object" && b && typeof(b)==="function" && a instanceof b;
+			},
+			$intersects(a,b,key) {
+				if(Array.isArray(a) && Array.isArray(b)) {
+					this[b.as||key] = intersection(a,b);
+					return true;
+				}
 			},
 			$intersects(a,b) {
 				return Array.isArray(a) && Array.isArray(b) && intersection(a,b).length>0;
@@ -531,6 +780,14 @@
 			$length(value,length) { 
 				return a && a.length===length; 
 			},
+			$lock(value,_,key) {
+				try {
+					Object.defineProperty(this,key,{enumerable:true,value});
+				} catch(e) {
+					;
+				}
+				return true;
+			},
 			$lt(a,b) { 
 				return a < b; 
 			},
@@ -538,9 +795,9 @@
 				return a <= b; 
 			},
 			async $map(iterable,spec,key) {
-				const results = [];
-				let [f,as] = Array.isArray(spec) ? spec : [spec];
 				if(Symbol.iterator in Object(iterable)) {
+					const results = [];
+					let [f,as] = Array.isArray(spec) ? spec : [spec];
 					let key = 0;
 					for(let value of iterable) {
 						if(Array.isArray(iterable)) {
@@ -550,24 +807,58 @@
 						}
 						key++;
 					}
+					this[as||key] = results;
+					return true;
 				}
-				this[as||key] = results;
-				return true;
+				return false;
 			},
-			$matches(value,regexp,key) {
-				if(value) {
-					const query = value.matches||value.query;
-					if(typeof(query)==="function") {
-						let as;
-						if(Array.isArray(regexp)) {
-							as = regexp[2];
-							try {
-								regexp = new RegExp(...regexp.slice(0,2));
-							} catch(e) {
-								;
+			$match(value,match,key) {
+				if(value!=null) {
+					const type = typeof(value);
+					if(["boolean","number","string"].includes(type)) {
+						value += "";
+						if(typeof(match)==="string" && match[0]==="/") {
+							const parts = match.split("/");
+							if(parts.length===3) {
+								try {
+									match = new RegExp(parts[1],parts[2]);
+								} catch(e) {
+									;
+								}
 							}
 						}
-						const matches = query(regexp);
+					}
+					if(value.matches) {
+						const matches = value.matches(match);
+						if(matches && matches.length>0) {
+							return true;
+						}
+					}
+				}
+			},
+			$matches(value,match,key) {
+				if(value!=null) {
+					const type = typeof(value);
+					let as;
+					if(Array.isArray(match)) {
+						as = match[1];
+						match = match[0];
+					}
+					if(["boolean","number","string"].includes(type)) {
+						value += "";
+						if(typeof(match)==="string" && match[0]==="/") {
+							const parts = match.split("/");
+							if(parts.length===3) {
+								try {
+									match = new RegExp(parts[1],parts[2]);
+								} catch(e) {
+									;
+								}
+							}
+						}
+					}
+					if(value.matches||value.match) {
+						const matches = (value.matches||value.match)(match);
 						if(matches) {
 							this[as||key] = matches;
 							return true;
@@ -655,12 +946,7 @@
 				return a !== b; 
 			},
 			$nin(value,includer) {
-				if(value && typeof(value.in)==="function") {
-					return !value.in(includer);
-				}
-				if(includer && typeof(includer.includes)==="function") {
-					return !includer.includes(value);
-				}
+				return !FUNCTIONS.$in(includer,value);
 			},
 			async $not(a,tests,key) {
 				const resolve = (a,pname,value) => FUNCTIONS[pname] ? FUNCTIONS[pname].call(this,a,value,key) : false,
@@ -778,7 +1064,7 @@
 					}
 				}
 			},
-			$outside(value,[lo,hi]) {
+			$outside(value,[lo,hi],key) {
 				if(value) {
 					if(typeof(value.outside)==="function") {
 						return value.outside(lo,hi);
@@ -807,20 +1093,29 @@
 				return true;
 			},
 			async $reduce(iterable,spec,key) {
-				let [f,accum,as] = Array.isArray(spec) ? spec : [spec];
 				if(Symbol.iterator in Object(iterable)) {
-					let key = 0;
+					let [f,accum,as] = Array.isArray(spec) ? spec : [spec],
+							key = 0;
 					for(let value of iterable) {
 						if(Array.isArray(iterable)) {
-							accum = await f(accum,value,key,iterable);
+							if(accum===undefined && key===0) {
+								accum = value;
+							} else {
+								accum = await f(accum,value,key,iterable);
+							}
 						} else {
-							accum = await f(accum,value[1],value[0],iterable);
+							if(accum===undefined && key===0) {
+								accum = value[0];
+							} else {
+								accum = await f(accum,value[1],value[0],iterable);
+							}
 						}
 						key++;
 					}
+					this[as||key] = accum;
+					return true;
 				}
-				this[as||key] = accum;
-				return true;
+				return false;
 			},
 			$return(_,value,key) {
 				if(value===undefined) {
@@ -831,12 +1126,12 @@
 				return true;
 			},
 			$sample(iterable,spec,key) {
-				let [pct,max=Infinity,as] = Array.isArray(spec) ? spec : [spec];
-				const sample = [],
-					indexes = [];
-				let i = 0;
 				// get count random items from an iterable
 				if(Symbol.iterator in Object(iterable)) {
+					let [pct,max=Infinity,as] = Array.isArray(spec) ? spec : [spec];
+					const sample = [],
+						indexes = [];
+					let i = 0;
 					for(const item of iterable) {
 						i++;
 						const rand = Math.random();
@@ -849,25 +1144,58 @@
 							if(sample.length===max) break;
 						}
 					}
+					const length = Math.min(max,Math.round(i * pct));
+					this[as||key] = sample.slice(0,length);
+					return true;
 				}
-				const length = Math.min(max,Math.round(i * pct));
-				this[as||key] = sample.slice(0,length);
-				return true;
+				return false;
 			},
 			async $search(text,phrase) {
 				if(text) {
-					if(typeof(text.search)==="function") {
-						return text.search(phrase);
+					let language,
+						stems,
+						tris;
+					if(Array.isArray(phrase)) {
+						stems = phrase[1],
+						tris = phrase[2],
+						language = phrase[3],
+						phrase = phrase[0]
 					}
-					const tokens = tokenize(phrase),
-					stems = stems(tokens);
-					if(stems.some(stem => text.includes(stem))) {
+					if(typeof(tris)!=="number" || tris===0) {
+						tris = 0.8;
+					}
+					if(typeof(language)!=="string") {
+						language = "en";
+					}
+					const stops = STOPWORDS[language] || STOPWORDS.en;
+					
+					if(typeof(text)!=="string") {
+						if(typeof(text.search)==="function") {
+							return text.search(phrase,{stems,trigrams,language});
+						}
+						return false;
+					}
+					let tokens = tokenize(phrase),
+						stemmed = tokens.map(token => stemmer(token)).filter(stem => !stops.includes(stem));
+					if(!stems && stemmed.some(stem => text.includes(stem))) {
 						return true;
 					}
-					const tris = trigrams(phrase.replace(/\s/g,"")),
-						count = tris.reduce((accum,tri) => { return text.includes(tri) ? accum++ : accum },0);
-					if((count/tris.length)>.8) {
-						return true;
+					if(!stems && !tris) {
+						return false;
+					}
+					tokens = tokenize(text);
+					if(stems) {
+						const count = tokens.reduce((accum,token) => stemmed.some(stem => token.includes(stem)) ? accum += 1 : accum,0);
+						if(count/tokens.length>=stems) {
+							return true;
+						}
+					}
+					if(tris) {
+						const grams = trigrams(tokens.join("")),
+							count = grams.reduce((accum,tri) => text.includes(tri) ? accum += 1 : accum,0);
+						if((count/grams.length)>tris) {
+							return true;
+						}
 					}
 				}
 			},
@@ -890,15 +1218,18 @@
 				return false;
 			},
 			$sort(sortable,spec,key) {
-				let [f,as] = Array.isArray(spec) ? spec : [spec],
-					result;
-				if(sortable && typeof(sortable.sort)==="function") {
-					result = sortable.sort((a,b) => f(a,b));
-				} else {
-					result = [];
+				if(Array.isArray(sortable)) {
+					sortable = sortable.slice();
+					let [f,as] = Array.isArray(spec) ? spec : [spec],
+							result;
+						if(sortable && typeof(sortable.sort)==="function") {
+							result = sortable.sort((a,b) => f(a,b));
+						} else {
+							result = [];
+						}
+						this[as||key] = result
+						return true;
 				}
-				this[as||key] = result
-				return true;
 			},
 			$sum(iterable,as,key) {
 				if(Symbol.iterator in Object(iterable)) {
@@ -953,7 +1284,7 @@
 						const valid = validator(this,validations[validationKey]);
 						if(!valid) {
 							const error = new TypeError(`failed validation ${validationKey} for ${this}`);
-							if(validations.onError) {
+							if(typeof(validations.onError)==="function") {
 								validations.onError(error,value,key,this);
 							} else {
 								throw(error);
