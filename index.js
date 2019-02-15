@@ -553,8 +553,12 @@
 						this[as||key] = iterable.length
 					} else if(typeof(iterable.count)==="function") {
 						this[as||key] = iterable.count();
+					} else if(typeof(iterable.count)==="number") {
+						this[as||key] = iterable.count;
 					} else if(typeof(iterable.size)==="function") {
 						this[as||key] = iterable.size();
+					} else if(typeof(iterable.size)==="number") {
+						this[as||key] = iterable.size;
 					} else {
 						let count = 0;
 						for(let value of iterable) {
@@ -778,7 +782,7 @@
 				return /^\d{3}-?\d{2}-?\d{4}$/.test(value);
 			},
 			$length(value,length) { 
-				return a && a.length===length; 
+				return a && (a.length===length || a.size===length); 
 			},
 			$lock(value,_,key) {
 				try {

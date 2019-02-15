@@ -452,6 +452,8 @@ $year - `{<property>: {$year: number year}}`
 
 ## Updates
 
+2019-02-15 v2.03b - `$length` now handles `.count`, `.count()`, `.size`, `.size()`, `.length`.
+
 2019-02-12 v2.03b - All functions now have basic documentation.
 
 2019-02-11 v2.02b - Lots of documentation. Started deprecation on method name `.match` in favor of `.query`, but both will work for now through aliasing.
